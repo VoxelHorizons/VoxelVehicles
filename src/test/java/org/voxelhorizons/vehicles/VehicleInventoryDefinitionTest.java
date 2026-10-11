@@ -1,0 +1,50 @@
+package org.voxelhorizons.vehicles;
+
+import org.junit.Test;
+import org.voxelhorizons.content.ContentID;
+import org.voxelhorizons.content.item.ItemDefinition;
+import java.util.*;
+import static org.junit.Assert.*;
+
+public class VehicleInventoryDefinitionTest {
+    private final ContentID tractor=ContentID.of("voxel","tractor");
+    private VehicleInventoryDefinition parse(Map<String,Object> map){
+        return VehicleInventoryDefinition.parse(tractor,map);
+    }
+    @Test public void noStorageUsesBaseLayoutByDefault(){
+        VehicleInventoryDefinition spec=VehicleInventoryDefinition.parse(tractor,null);
+        assertTrue(spec.enabled);
+        assertEquals(0,spec.storageSize);
+        assertNull(spec.previewItem);
+        assertNull(spec.title);
+    }
+    @Test public void overrideStorageAndPreviewWithoutHardcodedGlyphs(){
+        Map<String,Object> values=new HashMap<String,Object>();
+        values.put("enabled",true);
+        values.put("storage_size",15);
+        values.put("preview_item","voxel:tractor_inventory_preview");
+        values.put("storage_title",":my_own_inventory_glyph:");
+        VehicleInventoryDefinition spec=parse(values);
+        assertTrue(spec.enabled);
+        assertEquals(15,spec.storageSize);
+        assertEquals("voxel:tractor_inventory_preview",spec.previewItem.toString());
+        assertEquals(":my_own_inventory_glyph:",spec.storageTitle);
+    }
+    @Test public void disabledVehicleCannotOpen(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("enabled",false);
+        assertFalse(parse(data).enabled);
+    }
+    @Test(expected=IllegalArgumentException.class)
+    public void rejectsExcessStorage(){
+        Map<String,Object> values=new HashMap<String,Object>();
+        values.put("storage_size",55);
+        parse(values);
+    }
+    @Test(expected=IllegalArgumentException.class)
+    public void rejectsUnsupportedKeys(){
+        Map<String,Object> values=new HashMap<String,Object>();
+        values.put("hardcoded_inventory_alias",true);
+        parse(values);
+    }
+}
