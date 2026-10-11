@@ -37,6 +37,34 @@ final class VehicleCollision {
         return true;
     }
 
+    /**
+     * Only invoked when the fast physics collision check has rejected placement.
+     * Explain which world boundary, unloaded chunk or solid block blocked spawning.
+     */
+    static String blockedReason(Location where,VehicleDefinition d){
+        if(where==null||where.getWorld()==null)return "There is no valid world at this location.";
+        World world=where.getWorld();
+        Location base=VehicleTransform.collisionBase(where,d);
+        double half=d.width*0.5;
+        double x=base.getX(),y=base.getY(),z=base.getZ();
+        int minX=(int)Math.floor(x-half+0.001),maxX=(int)Math.floor(x+half-0.001);
+        int minZ=(int)Math.floor(z-half+0.001),maxZ=(int)Math.floor(z+half-0.001);
+        int minY=(int)Math.floor(y+0.01),maxY=(int)Math.floor(y+d.height-0.01);
+        if(minY<minHeight(world)||maxY>=world.getMaxHeight())
+            return "Vehicle hitbox is outside world build height (y="+minY+".."+maxY+").";
+        for(int px=minX;px<=maxX;px++)for(int pz=minZ;pz<=maxZ;pz++){
+            if(!world.isChunkLoaded(px>>4,pz>>4))
+                return "Vehicle hitbox reaches an unloaded chunk at "+(px>>4)+","+(pz>>4)+".";
+            for(int py=minY;py<=maxY;py++){
+                org.bukkit.block.Block block=world.getBlockAt(px,py,pz);
+                if(block.getType().isSolid())
+                    return "Vehicle hitbox intersects "+block.getType().name()
+                            +" at "+px+","+py+","+pz+". Check vehicle.offset and hitbox settings.";
+            }
+        }
+        return "Vehicle collision placement rejected (try an open, flat area).";
+    }
+
     static Location step(VehicleInstance v,VehicleDefinition d,double dx,double dy,double dz,
                          double maxStep){
         Location pos=v.location.clone();
