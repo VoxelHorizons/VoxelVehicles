@@ -147,6 +147,28 @@ final class VehicleTerrain {
             return ((Number)m.invoke(b)).doubleValue();
         }
 
+        /**
+         * Allocation-free presence query: -1 if a required chunk is unloaded,
+         * 0 for clear space, 1 for collision. Used by repeated body clearance
+         * and ground-support probes that do not need a list of Box objects.
+         *
+         * Like collisions(), first validate every covered chunk; never treat
+         * unloaded terrain as empty or permit a movement into it.
+         */
+        int contact(double x0,double y0,double z0,double x1,double y1,double z1){
+            int minX=(int)Math.floor(x0+EPS),maxX=(int)Math.floor(x1-EPS);
+            int minY=(int)Math.floor(y0+EPS),maxY=(int)Math.floor(y1-EPS);
+            int minZ=(int)Math.floor(z0+EPS),maxZ=(int)Math.floor(z1-EPS);
+            boolean touches=false;
+            for(int x=minX;x<=maxX;x++)for(int z=minZ;z<=maxZ;z++){
+                if(!loaded(x,z))return -1;
+                for(int y=minY;y<=maxY;y++)
+                    for(Box box:block(x,y,z))
+                        if(box.intersects(x0,y0,z0,x1,y1,z1))touches=true;
+            }
+            return touches?1:0;
+        }
+
         /** Finds colliding shapes; returns false if ANY required chunk is unloaded. */
         boolean collisions(double x0,double y0,double z0,double x1,double y1,double z1,List<Box> into){
             int minX=(int)Math.floor(x0+EPS),maxX=(int)Math.floor(x1-EPS);
