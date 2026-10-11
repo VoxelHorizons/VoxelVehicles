@@ -47,14 +47,14 @@ public class VehicleInventoryFillTest {
                 new ItemRenderDefinition("voxel:ui/blank",null),
                 Collections.<String,Object>emptyMap()));
         assertEquals(ui,VehicleInventories.findFillItem(definitions,
-                ContentID.of("voxel","ui/blank")));
-        assertEquals(ui,VehicleInventories.findFillItem(definitions,ui));
+                "voxel:ui/blank"));
+        assertEquals(ui,VehicleInventories.findFillItem(definitions,ui.toString()));
     }
 
     @Test(expected=IllegalArgumentException.class)
     public void unknownFillModelIsRejectedClearly(){
         VehicleInventories.findFillItem(Collections.<ContentID,ItemDefinition>emptyMap(),
-                ContentID.of("voxel","missing_blank"));
+                "voxel:missing_blank");
     }
 
     @Test public void shiftClickNeverReplacesPreviewOrFiller(){
