@@ -24,11 +24,12 @@ import java.util.UUID;
  */
 final class VehicleTeleportTracker {
     private static final class Pose {
-        final World world;
-        final double x, y, z;
-        final float yaw, pitch;
+        World world;
+        double x, y, z;
+        float yaw, pitch;
 
-        Pose(Location at) {
+        Pose(Location at){update(at);}
+        void update(Location at){
             world=at.getWorld();
             x=at.getX();y=at.getY();z=at.getZ();
             yaw=at.getYaw();pitch=at.getPitch();
@@ -69,12 +70,16 @@ final class VehicleTeleportTracker {
     boolean ensure(Entity entity,Location target,boolean rotationMatters){
         if(entity==null||!entity.isValid())return false;
         UUID id=entity.getUniqueId();
-        if(!changed(last.get(id),target,rotationMatters)){
+        Pose previous=last.get(id);
+        if(!changed(previous,target,rotationMatters)){
             avoided++;
             return true;
         }
         if(!entity.teleport(target))return false;
-        last.put(id,new Pose(target));
+        // Under hundreds of drivers, mutate the existing five-field pose
+        // rather than allocating another object for every movement packet.
+        if(previous==null)last.put(id,new Pose(target));
+        else previous.update(target);
         sent++;
         return true;
     }
