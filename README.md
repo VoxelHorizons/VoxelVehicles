@@ -380,10 +380,20 @@ additional client functionality is added. The rendered item copies placed
 vehicle dye color if both the item and its VoxelCore definition are dyeable.
 The preview item is locked and never counted as cargo.
 
-To open a vehicle inventory, **sneak and right-click** an unoccupied vehicle
-while holding a non-block item, or use `/vv inventory` while riding / near
-the vehicle. A normal right-click continues to mount. Permission
-`voxelvehicles.inventory` is granted to players by default. Storage and
+To open a vehicle inventory, **sneak + right-click** an unoccupied
+vehicle **with any held item**; normal right-click mounts it. While riding,
+press **F (swap hands)** to open the vehicle menu without actually swapping
+held items, or use `/vv inventory` at any time while riding or nearby.
+The F shortcut can be disabled with `inventory.open-with-swap-hand: false`
+in `plugins/VoxelVehicles/config.yml`. The shortcut only overrides F
+for the driver of a vehicle with its GUI enabled; on foot and in other mounts,
+F continues to swap hands normally. The inventory key (normally E) opens
+the player's personal inventory entirely on the Minecraft Java client
+when mounted on an ItemDisplay, so there is no server packet or
+`InventoryOpenEvent` to intercept. Matching horse-style E behaviour
+would require a different client-visible mount type or client mod, not just
+Bukkit event handling. Permission `voxelvehicles.inventory` is granted
+to players by default. Storage and
 preview item can be configured independently per vehicle. The UI shows
 the no-storage title if `inventory.rows: 0`, and the storage variant when
 `inventory.rows` is 1–6. The visible cargo slots are determined directly
