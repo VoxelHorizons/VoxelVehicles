@@ -56,11 +56,16 @@ final class VehicleInventories implements Listener {
         }
         Session existing=open.get(vehicle.id);
         if(existing!=null){
+            if(existing.player.getUniqueId().equals(player.getUniqueId())
+                    &&player.getOpenInventory()!=null
+                    &&player.getOpenInventory().getTopInventory()==existing.top)return true;
             if(existing.player.getUniqueId().equals(player.getUniqueId())){
-                player.openInventory(existing.top);return true;
+                capture(existing);
+                open.remove(vehicle.id);
+            }else{
+                player.sendMessage("§cThis vehicle inventory is currently in use.");
+                return false;
             }
-            player.sendMessage("§cThis vehicle inventory is currently in use.");
-            return false;
         }
         int rows=plugin.getConfig().getInt("inventory.rows",3);
         int size=rows*9;
@@ -127,6 +132,12 @@ final class VehicleInventories implements Listener {
         Session session=find(event.getView().getTopInventory());
         if(session==null)return;
         int raw=event.getRawSlot();
+        // Double-click collection searches the entire open inventory,
+        // including the locked preview item, even when a cargo slot is clicked.
+        if(event.getAction()==InventoryAction.COLLECT_TO_CURSOR){
+            event.setCancelled(true);
+            return;
+        }
         if(raw>=0&&raw<session.top.getSize()){
             if(!session.cargoSlots.contains(raw)){event.setCancelled(true);return;}
         }else if(event.getAction()==InventoryAction.MOVE_TO_OTHER_INVENTORY
