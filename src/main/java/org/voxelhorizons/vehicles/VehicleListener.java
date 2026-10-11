@@ -41,8 +41,12 @@ final class VehicleListener implements Listener {
         if(!id.isPresent()||!vehicles.definition(id.get()).isPresent())return;
         Location target=event.getClickedBlock().getRelative(event.getBlockFace()).getLocation().add(0.5,0,0.5);
         target.setYaw(player.getLocation().getYaw());
-        Optional<VehicleInstance> result=vehicles.spawn(id.get(),player.getUniqueId(),target,hand);
-        if(!result.isPresent()){player.sendMessage("§cCannot place a vehicle here.");return;}
+        VehicleManager.SpawnResult result=vehicles.trySpawn(id.get(),player.getUniqueId(),target,hand);
+        if(!result.successful()){
+            player.sendMessage("§cCannot place "+id.get()+": "+result.failure);
+            event.setCancelled(true);
+            return;
+        }
         if(player.getGameMode()!=GameMode.CREATIVE){
             hand.setAmount(hand.getAmount()-1);
         }
