@@ -4,93 +4,165 @@ import org.bukkit.Location;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import java.lang.reflect.Method;
 import java.util.UUID;
 
 /**
- * One visual ItemDisplay plus one Interaction entity, regardless of vehicle size.
- * A temporary invisible armor-stand seat is created only while driven.
- * No NMS and no ProtocolLib.
+ * Parked: one ItemDisplay + one Interaction.
+ * Driven: ItemDisplay is the vehicle root, carrying an invisible armor-stand
+ * seat (which carries the player). Only the root is teleported each tick:
+ * vanilla passenger packets keep the rider and model in the same movement chain.
  */
 final class VehicleRenderer {
     private final VoxelVehicles plugin;
     VehicleRenderer(VoxelVehicles plugin){this.plugin=plugin;}
 
     void activate(VehicleInstance vehicle, VehicleDefinition definition) {
-        Location at=vehicle.location;
-        ItemStack item=plugin.core().getItemManager().createRenderItem(definition.model);
+        Location at=VehicleTransform.visual(vehicle.location,definition);
         Entity display=null,hitbox=null;
         try {
             display=at.getWorld().spawnEntity(at,EntityType.valueOf("ITEM_DISPLAY"));
-            invoke(display,"setItemStack",ItemStack.class,item);
             applyFixedTransform(display);
-            invokeOptional(display,"setTeleportDuration",int.class,plugin.getConfig().getInt("render.interpolation-ticks",1));
             invokeOptional(display,"setViewRange",float.class,definition.viewDistance/64.0f);
-            applyScale(display,definition.scale);
+            invokeOptional(display,"setTeleportDuration",int.class,interpolation());
             tag(display,vehicle.id);
-            hitbox=at.getWorld().spawnEntity(hitLocation(at,definition),EntityType.valueOf("INTERACTION"));
-            invoke(hitbox,"setInteractionWidth",float.class,(float)definition.width);
-            invoke(hitbox,"setInteractionHeight",float.class,(float)definition.height);
-            invokeOptional(hitbox,"setResponsive",boolean.class,true);
+            hitbox=at.getWorld().spawnEntity(VehicleTransform.hitbox(vehicle.location,definition),
+                    EntityType.valueOf("INTERACTION"));
             tag(hitbox,vehicle.id);
-            vehicle.display=display;vehicle.hitbox=hitbox;
-        }catch(Exception error){
+            vehicle.display=display;
+            vehicle.hitbox=hitbox;
+            refresh(vehicle,definition);
+        }catch(Exception error) {
             if(display!=null)display.remove();
             if(hitbox!=null)hitbox.remove();
+            vehicle.display=null;
+            vehicle.hitbox=null;
             throw new IllegalStateException("Could not spawn modern vehicle entities",error);
         }
     }
 
-    void move(VehicleInstance v,VehicleDefinition d) {
-        if(v.display!=null&&v.display.isValid())v.display.teleport(v.location);
-        if(v.hitbox!=null&&v.hitbox.isValid())v.hitbox.teleport(hitLocation(v.location,d));
-        if(v.seat!=null&&v.seat.isValid()) {
-            Location at=seatLocation(v.location,d);
-            if(!v.seat.teleport(at)) {
-                // On older Paper builds teleport() can refuse passenger vehicles.
-                plugin.getLogger().warning("Vehicle seat teleport rejected; stopping "+v.id);
-                v.seat.eject();v.stop();
+    /** Re-apply the current VoxelCore model, hitbox and offsets after content reload. */
+    void refresh(VehicleInstance vehicle,VehicleDefinition definition) throws Exception {
+        if(vehicle.display==null||!vehicle.display.isValid()
+                ||vehicle.hitbox==null||!vehicle.hitbox.isValid())return;
+        ItemStack item=plugin.core().getItemManager().createRenderItem(definition.model);
+        // Per-stack color support is also present in the dyeability PR.
+        if(vehicle.dyeColor!=null&&plugin.core().getItemManager().isDyeable(item))
+            item=plugin.core().getItemManager().setDyeColor(item,vehicle.dyeColor.intValue());
+        invoke(vehicle.display,"setItemStack",ItemStack.class,item);
+        applyFixedTransform(vehicle.display);
+        invokeOptional(vehicle.display,"setViewRange",float.class,definition.viewDistance/64.0f);
+        invoke(vehicle.hitbox,"setInteractionWidth",float.class,(float)definition.width);
+        invoke(vehicle.hitbox,"setInteractionHeight",float.class,(float)definition.height);
+        invokeOptional(vehicle.hitbox,"setResponsive",boolean.class,true);
+        applyMatrix(vehicle.display,definition,vehicle.linkedSeat,vehicle.passengerOffsetY);
+        move(vehicle,definition);
+    }
+
+    void move(VehicleInstance vehicle,VehicleDefinition definition){
+        if(vehicle.display!=null&&vehicle.display.isValid()){
+            if(vehicle.linkedSeat&&vehicle.seat!=null&&vehicle.seat.isValid()){
+                // Seat is a passenger of ItemDisplay, player is a passenger of seat.
+                // Correct for the seat's vanilla passenger height.
+                Location root=VehicleTransform.seat(vehicle.location,definition)
+                        .subtract(0,vehicle.passengerOffsetY,0);
+                vehicle.display.teleport(root);
+            }else{
+                // If the server rejects display-entity passengers, keep functional
+                // independent transport without silently throwing the rider away.
+                if(vehicle.seat!=null&&vehicle.seat.isValid()&&!vehicle.seat.teleport(
+                        VehicleTransform.seat(vehicle.location,definition))){
+                    plugin.getLogger().warning("Vehicle seat teleport rejected: "+vehicle.id);
+                    vehicle.seat.eject();
+                    vehicle.stop();
+                }
+                vehicle.display.teleport(VehicleTransform.visual(vehicle.location,definition));
             }
+        }
+        if(vehicle.hitbox!=null&&vehicle.hitbox.isValid())
+            vehicle.hitbox.teleport(VehicleTransform.hitbox(vehicle.location,definition));
+    }
+
+    boolean seat(VehicleInstance vehicle,VehicleDefinition definition,Player player){
+        if(vehicle.seat!=null&&vehicle.seat.isValid()||vehicle.display==null||!vehicle.display.isValid())return false;
+        ArmorStand stand=(ArmorStand)vehicle.location.getWorld().spawnEntity(
+                VehicleTransform.seat(vehicle.location,definition),EntityType.ARMOR_STAND);
+        stand.setVisible(false);
+        stand.setGravity(false);
+        stand.setSmall(true);
+        stand.setMarker(true);
+        tag(stand,vehicle.id);
+        boolean linked=false;
+        try {
+            // On supported Java clients this uses ONE root movement update for the
+            // visual model and the driver, eliminating independent seat chasing.
+            linked=vehicle.display.addPassenger(stand);
+            if(!stand.addPassenger(player)){
+                if(linked)vehicle.display.removePassenger(stand);
+                stand.remove();
+                return false;
+            }
+            vehicle.linkedSeat=linked;
+            vehicle.passengerOffsetY=linked
+                    ?stand.getLocation().getY()-vehicle.display.getLocation().getY():0;
+            vehicle.seat=stand;
+            vehicle.driver=player.getUniqueId();
+            invokeOptional(vehicle.display,"setTeleportDuration",int.class,0);
+            applyMatrix(vehicle.display,definition,linked,vehicle.passengerOffsetY);
+            move(vehicle,definition);
+            if(!linked)plugin.getLogger().warning("Display passenger link not supported; vehicle "
+                    +vehicle.id+" is using independent seat teleports.");
+            return true;
+        }catch(Exception error){
+            if(linked)vehicle.display.removePassenger(stand);
+            stand.eject();
+            stand.remove();
+            vehicle.seat=null;
+            vehicle.linkedSeat=false;
+            vehicle.passengerOffsetY=0;
+            vehicle.stop();
+            plugin.getLogger().warning("Unable to mount vehicle "+vehicle.id+": "+error.getMessage());
+            return false;
         }
     }
 
-    boolean seat(VehicleInstance v,VehicleDefinition d,org.bukkit.entity.Player player) {
-        if(v.seat!=null&&v.seat.isValid())return false;
-        ArmorStand seat=(ArmorStand)v.location.getWorld().spawnEntity(seatLocation(v.location,d),EntityType.ARMOR_STAND);
-        seat.setVisible(false);seat.setGravity(false);seat.setSmall(true);
-        seat.setInvulnerable(true);seat.setMarker(true);
-        tag(seat,v.id);
-        if(!seat.addPassenger(player)){seat.remove();return false;}
-        v.seat=seat;v.driver=player.getUniqueId();
-        return true;
+    void unseat(VehicleInstance vehicle,VehicleDefinition definition){
+        if(vehicle.seat!=null){
+            if(vehicle.linkedSeat&&vehicle.display!=null&&vehicle.display.isValid())
+                vehicle.display.removePassenger(vehicle.seat);
+            vehicle.seat.eject();
+            vehicle.seat.remove();
+            vehicle.seat=null;
+        }
+        vehicle.linkedSeat=false;
+        vehicle.passengerOffsetY=0;
+        vehicle.stop();
+        if(definition!=null&&vehicle.display!=null&&vehicle.display.isValid()){
+            try {
+                applyMatrix(vehicle.display,definition,false,0);
+                invokeOptional(vehicle.display,"setTeleportDuration",int.class,interpolation());
+                move(vehicle,definition);
+            }catch(Exception ex){plugin.getLogger().warning("Seat reset failed: "+ex.getMessage());}
+        }
     }
 
-    void unseat(VehicleInstance v){
-        if(v.seat!=null){v.seat.eject();v.seat.remove();v.seat=null;}
-        v.stop();
-    }
-    void deactivate(VehicleInstance v){
-        unseat(v);
-        if(v.display!=null){v.display.remove();v.display=null;}
-        if(v.hitbox!=null){v.hitbox.remove();v.hitbox=null;}
+    void deactivate(VehicleInstance vehicle){
+        unseat(vehicle,null);
+        if(vehicle.display!=null){vehicle.display.remove();vehicle.display=null;}
+        if(vehicle.hitbox!=null){vehicle.hitbox.remove();vehicle.hitbox=null;}
     }
 
-    private void tag(Entity e, UUID id){
-        e.addScoreboardTag("voxelvehicles");e.addScoreboardTag("vv:"+id);
-        e.setInvulnerable(true);e.setGravity(false);
+    private int interpolation(){
+        return Math.max(0,Math.min(59,plugin.getConfig().getInt("render.interpolation-ticks",1)));
     }
 
-    private Location hitLocation(Location at,VehicleDefinition d){
-        double sin=Math.sin(Math.toRadians(at.getYaw())),cos=Math.cos(Math.toRadians(at.getYaw()));
-        double x=d.hitboxX*cos-d.hitboxZ*sin;
-        double z=d.hitboxX*sin+d.hitboxZ*cos;
-        return at.clone().add(x,d.hitboxY+d.height*0.5,z);
-    }
-    private Location seatLocation(Location at,VehicleDefinition d){
-        double sin=Math.sin(Math.toRadians(at.getYaw())),cos=Math.cos(Math.toRadians(at.getYaw()));
-        return at.clone().add(d.seatX*cos-d.seatZ*sin,d.seatY,
-                d.seatX*sin+d.seatZ*cos);
+    private void tag(Entity e,UUID id){
+        e.addScoreboardTag("voxelvehicles");
+        e.addScoreboardTag("vv:"+id);
+        e.setInvulnerable(true);
+        e.setGravity(false);
+        invokeOptional(e,"setPersistent",boolean.class,false);
     }
 
     @SuppressWarnings({"rawtypes","unchecked"})
@@ -100,14 +172,23 @@ final class VehicleRenderer {
         display.getClass().getMethod("setItemDisplayTransform",kind).invoke(display,fixed);
     }
 
-    private static void applyScale(Entity display,double size) throws Exception{
-        if(size==1)return;
+    /** On a mounted vehicle the model offsets back from the seat-root origin. */
+    private static void applyMatrix(Entity entity,VehicleDefinition definition,boolean mounted,double passengerOffsetY)
+            throws Exception {
         Class<?> matrix=Class.forName("org.joml.Matrix4f");
         Object value=matrix.getConstructor().newInstance();
-        matrix.getMethod("scale",float.class,float.class,float.class)
-                .invoke(value,(float)size,(float)size,(float)size);
-        display.getClass().getMethod("setTransformationMatrix",matrix).invoke(display,value);
+        if(mounted){
+            // Model at display origin, seat at display origin + seat XYZ.
+            // The root follows the seat and the model is translated back.
+            matrix.getMethod("translate",float.class,float.class,float.class).invoke(
+                    value,(float)-definition.seatX,
+                    (float)(passengerOffsetY-definition.seatY),(float)-definition.seatZ);
+        }
+        matrix.getMethod("scale",float.class,float.class,float.class).invoke(
+                value,(float)definition.scale,(float)definition.scale,(float)definition.scale);
+        entity.getClass().getMethod("setTransformationMatrix",matrix).invoke(entity,value);
     }
+
     private static void invoke(Object entity,String name,Class<?> type,Object value) throws Exception{
         entity.getClass().getMethod(name,type).invoke(entity,value);
     }
