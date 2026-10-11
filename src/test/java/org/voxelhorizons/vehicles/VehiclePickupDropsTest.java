@@ -2,7 +2,13 @@ package org.voxelhorizons.vehicles;
 
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.World;
+import org.bukkit.entity.Item;
 import org.bukkit.inventory.ItemStack;
+import java.lang.reflect.Proxy;
+import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Test;
 import org.voxelhorizons.content.ContentID;
 
@@ -74,6 +80,51 @@ public class VehiclePickupDropsTest {
         VehicleInstance v=vehicle();
         v.storage[5]=new ItemStack(Material.DIRT,0);
         assertEquals(1,VehiclePickupDrops.snapshot(v,new ItemStack(Material.PAPER)).size());
+    }
+
+    @Test public void airStacksDoNotAbortVehicleReclamation(){
+        VehicleInstance v=vehicle();
+        v.storage[0]=new ItemStack(Material.AIR);
+        v.storage[1]=new ItemStack(Material.DIAMOND);
+        List<ItemStack> drops=VehiclePickupDrops.snapshot(v,new ItemStack(Material.PAPER));
+        assertEquals(2,drops.size());
+        assertEquals(Material.DIAMOND,drops.get(1).getType());
+    }
+
+    @Test public void partialWorldDropFailureRollsBackAllPreviouslySpawnedItems(){
+        AtomicInteger spawns=new AtomicInteger(),removed=new AtomicInteger();
+        AtomicBoolean itemValid=new AtomicBoolean(true);
+        Item fake=(Item)Proxy.newProxyInstance(Item.class.getClassLoader(),
+                new Class<?>[]{Item.class},(proxy,method,args)->{
+                    if(method.getName().equals("isValid"))return itemValid.get();
+                    if(method.getName().equals("remove")){
+                        removed.incrementAndGet();itemValid.set(false);return null;
+                    }
+                    if(method.getName().equals("equals"))return proxy==args[0];
+                    if(method.getName().equals("hashCode"))return System.identityHashCode(proxy);
+                    throw new UnsupportedOperationException(method.getName());
+                });
+        World world=(World)Proxy.newProxyInstance(World.class.getClassLoader(),
+                new Class<?>[]{World.class},(proxy,method,args)->{
+                    if(method.getName().equals("dropItemNaturally")){
+                        if(spawns.incrementAndGet()==2)
+                            throw new IllegalStateException("simulated world drop rejection");
+                        return fake;
+                    }
+                    if(method.getName().equals("equals"))return proxy==args[0];
+                    if(method.getName().equals("hashCode"))return System.identityHashCode(proxy);
+                    throw new UnsupportedOperationException(method.getName());
+                });
+        try{
+            VehiclePickupDrops.spawn(world,new Location(world,0,64,0),Arrays.asList(
+                    new ItemStack(Material.PAPER),new ItemStack(Material.CHEST),
+                    new ItemStack(Material.DIAMOND)));
+            fail("must not allow a partial pickup");
+        }catch(IllegalStateException expected){
+            assertEquals("simulated world drop rejection",expected.getMessage());
+        }
+        assertEquals(2,spawns.get());
+        assertEquals(1,removed.get());
     }
 
     @Test(expected=IllegalArgumentException.class)
