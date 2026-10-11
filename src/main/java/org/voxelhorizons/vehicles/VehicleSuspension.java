@@ -10,8 +10,17 @@ import org.bukkit.Location;
 final class VehicleSuspension {
     private VehicleSuspension(){}
 
+    static void initialize(VehicleInstance vehicle,VehicleDefinition definition){
+        update(vehicle,definition,true);
+    }
+
     static boolean update(VehicleInstance vehicle,VehicleDefinition definition){
-        if(definition.type!=VehicleDefinition.Type.LAND)return level(vehicle,definition.tiltSmoothing);
+        return update(vehicle,definition,false);
+    }
+
+    private static boolean update(VehicleInstance vehicle,VehicleDefinition definition,boolean immediate){
+        double smoothing=immediate?1.0:definition.tiltSmoothing;
+        if(definition.type!=VehicleDefinition.Type.LAND)return level(vehicle,smoothing);
         Location base=VehicleTransform.collisionBase(vehicle.location,definition);
         VehicleTerrain.Space space=new VehicleTerrain.Space(base.getWorld());
         double angle=Math.toRadians(base.getYaw());
@@ -34,7 +43,7 @@ final class VehicleSuspension {
                 definition.wheelbase,definition.maxPitch);
         double targetRoll=VehicleTerrain.inclination(right,left,
                 definition.trackWidth,definition.maxRoll);
-        return smooth(vehicle,targetPitch,targetRoll,definition.tiltSmoothing);
+        return smooth(vehicle,targetPitch,targetRoll,smoothing);
     }
 
     private static double surface(VehicleTerrain.Space space,double x,double z,double y){
