@@ -27,6 +27,7 @@ public final class VehicleManager {
     private Map<ContentID,VehicleDefinition> definitions=Collections.emptyMap();
     private long revision=-1;
     private long ticks;
+    private boolean dirty;
 
     VehicleManager(VoxelVehicles plugin,VoxelCore core){
         this.plugin=plugin;this.core=core;
@@ -123,7 +124,7 @@ public final class VehicleManager {
             occupied.remove(v.id);
             deindex(v);renderer.deactivate(v);
         }
-        save();
+        if(dirty)save();
     }
 
     private void activate(VehicleInstance v,VehicleDefinition d){
@@ -183,14 +184,15 @@ public final class VehicleManager {
             next.setYaw(v.motion.yaw);
             if(!old.equals(next)){
                 v.location=next;
+                dirty=true;
                 renderer.move(v,d);
             }
         }
         int interval=Math.max(20,plugin.getConfig().getInt("physics.autosave-ticks",200));
-        if(++ticks%interval==0)save();
+        if(++ticks%interval==0&&dirty)save();
     }
     public void save(){
-        try{store.save(instances);}catch(IOException e){plugin.getLogger().severe("Vehicle save failed: "+e.getMessage());}
+        try{store.save(instances);dirty=false;}catch(IOException e){plugin.getLogger().severe("Vehicle save failed: "+e.getMessage());}
     }
     void shutdown(){
         save();
