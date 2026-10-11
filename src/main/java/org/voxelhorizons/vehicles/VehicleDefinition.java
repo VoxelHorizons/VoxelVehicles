@@ -13,9 +13,7 @@ public final class VehicleDefinition {
     public final ContentID id, model, drop;
     public final Type type;
     public final boolean publicAccess;
-    public final double width, height, depth, hitboxX, hitboxY, hitboxZ;
-    public final boolean rotatingHitbox;
-    public final int hitboxResolution;
+    public final double width, height, hitboxX, hitboxY, hitboxZ;
     /** Physical movement footprint, never inherited from visual or clickbox offsets. */
     public final double collisionWidth, collisionHeight, collisionX, collisionY, collisionZ;
     public final double scale, seatX, seatY, seatZ;
@@ -25,8 +23,7 @@ public final class VehicleDefinition {
     public final double wheelbase, trackWidth, maxPitch, maxRoll, tiltSmoothing;
 
     private VehicleDefinition(ContentID id, ContentID model, ContentID drop, Type type, boolean publicAccess,
-            double width, double height, double depth, boolean rotatingHitbox, int hitboxResolution,
-            double hitboxX, double hitboxY, double hitboxZ,
+            double width, double height, double hitboxX, double hitboxY, double hitboxZ,
             double collisionWidth, double collisionHeight, double collisionX, double collisionY, double collisionZ,
             double scale, double seatX, double seatY, double seatZ,
             double offsetX, double offsetY, double offsetZ, double offsetRotation, double speed, double reverse,
@@ -34,9 +31,7 @@ public final class VehicleDefinition {
             double flySpeed, double climbSpeed, float viewDistance,
             double wheelbase,double trackWidth,double maxPitch,double maxRoll,double tiltSmoothing) {
         this.id=id; this.model=model; this.drop=drop; this.type=type; this.publicAccess=publicAccess;
-        this.width=width; this.height=height; this.depth=depth;
-        this.rotatingHitbox=rotatingHitbox;this.hitboxResolution=hitboxResolution;
-        this.hitboxX=hitboxX; this.hitboxY=hitboxY; this.hitboxZ=hitboxZ;
+        this.width=width; this.height=height; this.hitboxX=hitboxX; this.hitboxY=hitboxY; this.hitboxZ=hitboxZ;
         this.collisionWidth=collisionWidth;this.collisionHeight=collisionHeight;
         this.collisionX=collisionX;this.collisionY=collisionY;this.collisionZ=collisionZ;
         this.scale=scale; this.seatX=seatX; this.seatY=seatY; this.seatZ=seatZ;
@@ -56,9 +51,7 @@ public final class VehicleDefinition {
         try { type=Type.valueOf(String.valueOf(m.containsKey("type")?m.get("type"):"LAND").toUpperCase(java.util.Locale.ROOT)); }
         catch (IllegalArgumentException ex) { throw bad(item,"unknown vehicle type"); }
         Map<?,?> h=map(item,m.get("hitbox"),"hitbox");
-        keys(item,h,"hitbox","width","height","depth","rotating","resolution","offset");
-        if(h.containsKey("rotating")&&!(h.get("rotating") instanceof Boolean))
-            throw bad(item,"hitbox.rotating must be a boolean");
+        keys(item,h,"hitbox","width","height","offset");
         Map<?,?> o=map(item,h.get("offset"),"hitbox.offset");
         keys(item,o,"hitbox.offset","x","y","z");
         Map<?,?> collision=map(item,m.get("collision"),"collision");
@@ -76,11 +69,7 @@ public final class VehicleDefinition {
         if (m.containsKey("public") && !(m.get("public") instanceof Boolean)) throw bad(item,"public must be boolean");
         return Optional.of(new VehicleDefinition(item.id(),ref(item,m.get("model_item")),ref(item,m.get("drop")),
                 type,Boolean.TRUE.equals(m.get("public")),num(item,h,"width",1.4,0.1,16),
-                num(item,h,"height",1.5,0.1,16),
-                num(item,h,"depth",num(item,h,"width",1.4,0.1,16),0.1,16),
-                h.containsKey("rotating")?Boolean.TRUE.equals(h.get("rotating")):h.containsKey("depth"),
-                (int)whole(item,h,"resolution",2,1,3),
-                num(item,o,"x",0,-16,16),
+                num(item,h,"height",1.5,0.1,16),num(item,o,"x",0,-16,16),
                 num(item,o,"y",0,-16,16),num(item,o,"z",0,-16,16),
                 num(item,collision,"width",1.0,0.1,16),
                 num(item,collision,"height",1.5,0.1,16),
@@ -112,16 +101,6 @@ public final class VehicleDefinition {
         if(!(value instanceof Map))throw bad(item,key+" must be a mapping");
         return (Map<?,?>)value;
     }
-    private static long whole(ItemDefinition item,Map<?,?> map,String key,long def,long min,long max){
-        Object value=map.get(key);
-        if(value==null)return def;
-        if(!(value instanceof Number))throw bad(item,key+" must be an integer");
-        double d=((Number)value).doubleValue();
-        if(!Double.isFinite(d)||d!=Math.rint(d)||d<min||d>max)
-            throw bad(item,key+" outside "+min+".."+max);
-        return (long)d;
-    }
-
     private static double num(ItemDefinition item,Map<?,?> map,String key,double def,double min,double max) {
         Object value=map.get(key); if(value==null)return def;
         if(!(value instanceof Number))throw bad(item,key+" must be numeric");
