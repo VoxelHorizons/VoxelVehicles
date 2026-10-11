@@ -35,12 +35,13 @@ final class VehicleCollision {
         pos.setYaw(v.motion.yaw);
         int n=(int)Math.max(1,Math.ceil(Math.max(Math.abs(dx),Math.max(Math.abs(dy),Math.abs(dz)))/maxStep));
         double sx=dx/n,sy=dy/n,sz=dz/n;
+        boolean stepped=false;
         for(int i=0;i<n;i++){
             Location next=pos.clone().add(sx,sy,sz);
             if(clear(next,d)){pos=next;continue;}
-            if(d.type==VehicleDefinition.Type.LAND&&d.stepHeight>0){
+            if(d.type==VehicleDefinition.Type.LAND&&d.stepHeight>0&&!stepped){
                 Location raised=next.clone().add(0,d.stepHeight,0);
-                if(clear(raised,d)){pos=raised;continue;}
+                if(clear(raised,d)){pos=raised;stepped=true;continue;}
             }
             v.motion.speed=0;
             break;
