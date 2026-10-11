@@ -359,6 +359,10 @@ public final class VehicleManager {
                 revision=core.getContentRuntime().current().revision();
             }
         }
+        // One shape snapshot per world and server tick, shared between all
+        // riders. Previously each vehicle reparsed the same terrain blocks.
+        VehicleTerrain.Frame terrainFrame=new VehicleTerrain.Frame();
+        double maxStep=Math.max(0.05,plugin.getConfig().getDouble("physics.max-substep",0.25));
         for(Iterator<VehicleInstance> iter=occupied.values().iterator();iter.hasNext();){
             VehicleInstance v=iter.next();
             if(!v.active()||v.driver==null){iter.remove();continue;}
@@ -372,11 +376,10 @@ public final class VehicleManager {
             }
             VehicleDefinition d=definitions.get(v.type);
             if(d==null){deindex(v);renderer.unseat(v,d);index(v);iter.remove();continue;}
-            // One collision-shape snapshot per occupied vehicle/tick. The
-            // physical body is ground-relative, independent of model offsets.
-            VehicleTerrain.Space terrain=new VehicleTerrain.Space(v.location.getWorld());
+            // All vehicles in this world reuse decoded shapes within the
+            // current tick only. Edits become visible on the following tick.
+            VehicleTerrain.Space terrain=terrainFrame.space(v.location.getWorld());
             Location old=v.location;
-            double maxStep=Math.max(0.05,plugin.getConfig().getDouble("physics.max-substep",0.25));
             Location next;
             if(d.type==VehicleDefinition.Type.PLANE){
                 VehiclePhysics.advance(v.motion,d,v.input);
