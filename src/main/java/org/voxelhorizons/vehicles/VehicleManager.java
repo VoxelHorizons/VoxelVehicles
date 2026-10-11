@@ -24,6 +24,7 @@ public final class VehicleManager {
     private final VehicleRenderer renderer;
     private final VehicleParticles particles;
     private final VehiclePerformance performance=new VehiclePerformance();
+    private final VehicleOrphanSweep orphanSweep=new VehicleOrphanSweep();
     private VehicleInventories inventories;
     private final Map<UUID,VehicleInstance> instances=new LinkedHashMap<UUID,VehicleInstance>();
     private final VehicleChunkIndex chunkIndex=new VehicleChunkIndex();
@@ -60,7 +61,7 @@ public final class VehicleManager {
                 // models every 30 seconds. Explicit /vv sync and VoxelCore
                 // content revision changes still request a full refresh.
                 repairLoaded();
-                cleanupLoadedOrphans();
+                scheduleOrphanSweep();
             }
         },cleanupTicks,cleanupTicks);
     }
@@ -304,6 +305,26 @@ public final class VehicleManager {
         if(dirty)save();
     }
 
+    private void scheduleOrphanSweep(){
+        if(orphanSweep.remaining()>0)return;
+        List<Chunk> loaded=new ArrayList<Chunk>();
+        for(World world:Bukkit.getWorlds())
+            Collections.addAll(loaded,world.getLoadedChunks());
+        orphanSweep.schedule(loaded);
+    }
+
+    private void sweepOrphansIncrementally(){
+        int budget=Math.max(1,Math.min(256,plugin.getConfig().getInt(
+                "maintenance.cleanup-chunks-per-tick",16)));
+        orphanSweep.drain(budget,chunk->{
+            // Snapshot chunks may unload while the sweep is in progress.
+            // Never load the chunk to inspect it; ChunkLoadEvent will clean
+            // it if it is loaded again later.
+            if(chunk.getWorld().isChunkLoaded(chunk.getX(),chunk.getZ()))
+                cleanupOrphans(chunk);
+        });
+    }
+
     /**
      * Remove only tagged entities not referenced by the current live renderer
      * index. Never load a chunk to perform maintenance.
@@ -319,8 +340,13 @@ public final class VehicleManager {
     int cleanupOrphans(Chunk chunk){
         int removed=0;
         for(Entity entity:chunk.getEntities()){
-            if(entity.getScoreboardTags().contains("voxelvehicles")
-                    &&!entityIndex.containsKey(entity.getUniqueId())){
+            // Most chunk entities (players, items, mobs) cannot be ours.
+            // Avoid scoreboard-tag lookup and allocations for those types.
+            String type=entity.getType().name();
+            if(!type.equals("ITEM_DISPLAY")&&!type.equals("INTERACTION")
+                    &&!type.equals("ARMOR_STAND"))continue;
+            if(entityIndex.containsKey(entity.getUniqueId()))continue;
+            if(entity.getScoreboardTags().contains("voxelvehicles")){
                 entity.remove();
                 removed++;
             }
@@ -488,6 +514,9 @@ public final class VehicleManager {
             sent+=(int)(teleportCounts>>>32);
             avoided+=(int)teleportCounts;
         }
+        // Bound maintenance cost, even if hundreds of players have loaded
+        // thousands of chunks. Manual /vv cleanup remains a full sweep.
+        sweepOrphansIncrementally();
         // Effects use the same single server tick: no per-vehicle timers or entities.
         particles.tick(particleSources.values(),definitions,ticks);
         int interval=Math.max(20,plugin.getConfig().getInt("physics.autosave-ticks",200));
