@@ -20,6 +20,13 @@ final class VehicleRenderer {
     void activate(VehicleInstance vehicle, VehicleDefinition definition) {
         Location at=vehicle.location;
         ItemStack item=plugin.core().getItemManager().createRenderItem(definition.model);
+        if (vehicle.dyeColor != null) {
+            if (!plugin.core().getItemManager().isDyeable(item)) {
+                throw new IllegalArgumentException("Model item " + definition.model
+                        + " is not dyeable, but vehicle " + vehicle.type + " has a saved color");
+            }
+            item=plugin.core().getItemManager().setDyeColor(item,vehicle.dyeColor.intValue());
+        }
         Entity display=null,hitbox=null;
         try {
             display=at.getWorld().spawnEntity(at,EntityType.valueOf("ITEM_DISPLAY"));
