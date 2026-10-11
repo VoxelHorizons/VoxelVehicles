@@ -126,9 +126,9 @@ properties:
     seat: {x: 0.0, y: -0.7, z: 0.0}
 ```
 
-For a tractor, set `offset.y: -0.25` to lower the *whole* model/collision/seat assembly; adjust `seat.y` separately to move just the driver. `rotation` is degrees around the Y axis in addition to the driving direction. The visual and hitbox follow the same yaw and offsets; the vehicle's physics direction does not change.
+For a tractor, set `offset.y: -0.25` to lower the **visual model, interaction box and seat**; collision/terrain driving stays anchored to the logical wheel-ground position. Adjust `seat.y` separately to position the driver relative to the model. `rotation` is degrees around the Y axis in addition to the driving direction.
 
-While occupied, the invisible driver seat rides the visible ItemDisplay, and the player rides the seat. The display is the only movement root, avoiding independently teleporting the model and rider. If a server rejects that link, VoxelVehicles logs a warning and uses the older fallback. This needs real-client validation, especially when using unusual model transforms.
+The ItemDisplay now doubles as the player seat on supported servers: **no additional armor stand** and no change of world origin when mounting. Its model vertices are translated relative to the seat root in exactly the same way when parked and mounted. An invisible ArmorStand is used only as a compatibility fallback if direct riding is refused. This still requires testing on Paper 26.2.
 
 **Left-click / punch** an unoccupied owned vehicle to pick it up as a dropped VoxelCore item; admins with `voxelvehicles.admin` can also pick it up. An arm-swing ray test works even where the Interaction entity does not fire Bukkit damage events. `/vv remove` deletes a nearby instance without an item drop.
 
@@ -189,3 +189,33 @@ suspension:
 If your tractor currently uses `step_height: 0.6`, increase it to `1.0` to climb full blocks. The physics parser rejects values over 1.0. Other vehicle types can keep their old settings. `render.tilt-interpolation-ticks` in `plugins/VoxelVehicles/config.yml` defaults to 2.
 
 Modern collision shapes are available on Paper 1.19.4+; the older reflective fallback uses full solid cubes and therefore cannot represent precise stairs/slabs. Test against Paper 26.2 first. Visual slope animation is cosmetic, not a four-wheel rigid-body solver, and the current collision footprint remains axis-aligned even while the model tilts.
+
+## Stable seat anchor and independent physical collision (PR #8 follow-up)
+
+The **interaction hitbox is for mouse targeting only**. Its width/height/offset may overlap stone, and such overlaps must no longer reject vehicle placement. The terrain physics collision is a separate footprint anchored to the vehicle's logical ground position.
+
+```yaml
+properties:
+  vehicle:
+    type: LAND
+    offset: {x: 0.0, y: 0.0, z: 0.0, rotation: 0}
+    hitbox:
+      width: 2.8
+      height: 2.2
+      offset: {x: 0.0, y: -1.0, z: 0.0}
+    seat: {x: 0.0, y: -0.7, z: 0.0}
+    collision:
+      width: 1.0
+      height: 1.5
+      offset: {x: 0.0, y: 0.0, z: 0.0}
+```
+
+The new `collision` section is **optional**. Defaults are 1.0 block wide, 1.5 blocks tall, and no offset; tune it independently of your model/clickable bounds. A ground-level collision body may still legitimately prevent spawning *inside a solid obstacle*, but changing `hitbox.offset.y` or `vehicle.offset.y` no longer affects that decision.
+
+To eliminate the jump on mount, the ItemDisplay's world root always equals the configured seat location. Its transformation matrix translates the visible model back towards the visual origin. When mounting, the player becomes a direct passenger of that existing root, with no origin switch or offset remeasurement. The model's world position should therefore remain exactly where it was before mounting. The passenger's vanilla riding height may need tuning with `seat.y`, particularly if a fallback ArmorStand is in use.
+
+Test on Paper 26.2:
+1. Place a vehicle with a clickbox partially inside stone: placement must succeed if its **physics body** has room.
+2. Mount and dismount without movement: the tractor model must not jump or float.
+3. Drive through a slab, stairs, a single step and toward a two-block wall.
+4. Reload VoxelCore while the vehicle is parked, then mounted, and confirm offsets remain stable.
