@@ -15,20 +15,25 @@ final class VehicleInventoryDefinition {
     final boolean storageEnabled;
     final int rows;
     final ContentID previewItem;
+    /** null means inherit the global plugin config value. */
+    final Integer previewSlot;
+    /** null means inherit globally; empty string disables fillers for this vehicle. */
+    final String fillItem;
     final String title,storageTitle;
 
     private VehicleInventoryDefinition(boolean enabled,boolean storageEnabled,int rows,ContentID previewItem,
-            String title,String storageTitle){
+            Integer previewSlot,String fillItem,String title,String storageTitle){
         this.enabled=enabled;this.storageEnabled=storageEnabled;this.rows=rows;this.previewItem=previewItem;
+        this.previewSlot=previewSlot;this.fillItem=fillItem;
         this.title=title;this.storageTitle=storageTitle;
     }
 
     static VehicleInventoryDefinition parse(ContentID id,Object raw){
-        if(raw==null)return new VehicleInventoryDefinition(true,false,0,null,null,null);
+        if(raw==null)return new VehicleInventoryDefinition(true,false,0,null,null,null,null,null);
         if(!(raw instanceof Map))throw bad(id,"inventory must be a mapping");
         Map<?,?> data=(Map<?,?>)raw;
         Set<String> keys=new HashSet<String>();
-        Collections.addAll(keys,"enabled","storage_enabled","rows","preview_item","title","storage_title");
+        Collections.addAll(keys,"enabled","storage_enabled","rows","preview_item","preview-slot","fill-item","title","storage_title");
         for(Object key:data.keySet())
             if(!keys.contains(key))throw bad(id,"unknown inventory property "+key);
         Object enabled=data.get("enabled");
@@ -52,11 +57,22 @@ final class VehicleInventoryDefinition {
                 throw bad(id,"inventory.preview_item must be a VoxelCore item ID");
             preview=ContentID.parse((String)data.get("preview_item"),id.namespace());
         }
+        Integer previewSlot=null;
+        if(data.containsKey("preview-slot")){
+            Object slot=data.get("preview-slot");
+            if(!(slot instanceof Number)
+                    ||!Double.isFinite(((Number)slot).doubleValue())
+                    ||((Number)slot).doubleValue()!=Math.rint(((Number)slot).doubleValue())
+                    ||((Number)slot).intValue()<0||((Number)slot).intValue()>53)
+                throw bad(id,"inventory.preview-slot must be an integer between 0 and 53");
+            previewSlot=Integer.valueOf(((Number)slot).intValue());
+        }
+        String fillItem=title(id,data.get("fill-item"),"fill-item");
         String title=title(id,data.get("title"),"title");
         String withStorage=title(id,data.get("storage_title"),"storage_title");
         return new VehicleInventoryDefinition(!Boolean.FALSE.equals(enabled),
                 !Boolean.FALSE.equals(storageEnabled)&&storageRows>0,
-                storageRows,preview,title,withStorage);
+                storageRows,preview,previewSlot,fillItem,title,withStorage);
     }
     int effectiveStorageRows(){return storageEnabled?rows:0;}
 
