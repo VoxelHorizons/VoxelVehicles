@@ -16,6 +16,7 @@ public class VehicleTerrainFrameTest {
         final AtomicInteger shapeLookups=new AtomicInteger();
         final AtomicInteger loadedChecks=new AtomicInteger();
         Material material=Material.AIR;
+        int solidY=Integer.MIN_VALUE;
         boolean loaded=true;
         final World world=(World)Proxy.newProxyInstance(World.class.getClassLoader(),
                 new Class<?>[]{World.class},(proxy,method,args)->{
@@ -25,10 +26,12 @@ public class VehicleTerrainFrameTest {
                             return loaded;
                         case "getBlockAt":
                             shapeLookups.incrementAndGet();
+                            final Material at=solidY==Integer.MIN_VALUE
+                                    || ((Integer)args[1]).intValue()==solidY?material:Material.AIR;
                             return (Block)Proxy.newProxyInstance(Block.class.getClassLoader(),
                                     new Class<?>[]{Block.class},(b,m,a)->{
-                                        if(m.getName().equals("getType"))return material;
-                                        if(m.getName().equals("isEmpty"))return material==Material.AIR;
+                                        if(m.getName().equals("getType"))return at;
+                                        if(m.getName().equals("isEmpty"))return at==Material.AIR;
                                         if(m.getName().equals("toString"))return "FakeBlock";
                                         throw new UnsupportedOperationException(m.getName());
                                     });
@@ -98,6 +101,7 @@ public class VehicleTerrainFrameTest {
     @Test public void allocationFreeContactsMatchCollisionState(){
         FakeWorld world=new FakeWorld();
         world.material=Material.STONE;
+        world.solidY=64;
         VehicleTerrain.Space space=new VehicleTerrain.Frame().space(world.world);
         assertEquals(1,space.contact(0.1,64.1,0.1,0.9,64.9,0.9));
         assertEquals(0,space.contact(0.1,65.1,0.1,0.9,65.9,0.9));
