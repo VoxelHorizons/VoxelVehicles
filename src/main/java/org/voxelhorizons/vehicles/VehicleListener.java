@@ -266,18 +266,24 @@ final class VehicleListener implements Listener {
         if(!v.owner.equals(player.getUniqueId())
                 &&!player.hasPermission("voxelvehicles.admin"))return;
         VehicleDefinition d=vehicles.definition(v.type).orElse(null);
-        if(!vehicles.remove(v)){
-            player.sendMessage("§cRemove the installed chest and empty vehicle storage before picking it up.");
+        if(d==null){
+            player.sendMessage("§cVehicle definition unavailable; reload VoxelCore content before pickup.");
             return;
         }
-        if(d!=null){
-            // Drop back into the world so creative and survival players can both
-            // reclaim a vehicle without losing its normal VoxelCore item identity.
-            ItemStack drop=core.getItemManager().createItem(d.drop);
-            if(v.dyeColor!=null&&core.getItemManager().isDyeable(drop))
+        // Resolve the original VoxelCore drop and per-placement tint *before*
+        // removing anything. Failed content lookups must not delete vehicles.
+        ItemStack drop;
+        try{
+            drop=core.getItemManager().createItem(d.drop);
+            if(drop!=null&&v.dyeColor!=null&&core.getItemManager().isDyeable(drop))
                 drop=core.getItemManager().setDyeColor(drop,v.dyeColor.intValue());
-            player.getWorld().dropItemNaturally(v.location,drop);
+        }catch(RuntimeException error){
+            plugin.getLogger().warning("Cannot prepare vehicle drop "+v.id+": "+error.getMessage());
+            player.sendMessage("§cCannot prepare vehicle item drop; pickup cancelled.");
+            return;
         }
+        if(!vehicles.collect(v,drop))
+            player.sendMessage("§cCannot collect vehicle; check server logs and try again.");
     }
 
     @EventHandler public void leave(PlayerQuitEvent event){
