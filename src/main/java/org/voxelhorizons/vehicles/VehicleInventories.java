@@ -180,6 +180,11 @@ final class VehicleInventories implements Listener {
         VehicleDefinition definition=manager.definition(vehicle.type).orElse(null);
         if(definition==null||!definition.inventory.chest.enabled)return;
         VehicleChestDefinition chest=definition.inventory.chest;
+        if(!vehicle.owner.equals(player.getUniqueId())
+                &&!player.hasPermission("voxelvehicles.admin")){
+            player.sendMessage("§cOnly the owner can install or remove the chest.");
+            return;
+        }
         if(vehicle.chestInstalled()){
             if(vehicle.hasStoredItems()){
                 player.sendMessage("§cEmpty the vehicle storage before removing its chest.");
@@ -207,9 +212,12 @@ final class VehicleInventories implements Listener {
                 ItemStack current=player.getItemOnCursor();
                 if(current==null||current.getType()!=chest.item||current.getAmount()<=0)return;
                 if(manager.installChest(vehicle,current)){
-                    ItemStack rest=current.clone();
-                    rest.setAmount(current.getAmount()-1);
-                    player.setItemOnCursor(rest.getAmount()>0?rest:null);
+                    int remaining=current.getAmount()-1;
+                    if(remaining>0){
+                        ItemStack rest=current.clone();
+                        rest.setAmount(remaining);
+                        player.setItemOnCursor(rest);
+                    }else player.setItemOnCursor(null);
                     plugin.getServer().getScheduler().runTask(plugin,()->{
                         if(player.isOnline())open(player,vehicle);
                     });
