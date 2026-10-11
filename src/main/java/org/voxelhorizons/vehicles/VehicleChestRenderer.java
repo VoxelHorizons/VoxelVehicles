@@ -28,7 +28,7 @@ final class VehicleChestRenderer {
         if(v.chestDisplay==null||!v.chestDisplay.isValid()){
             remove(v);
             v.chestDisplay=v.location.getWorld().spawnEntity(
-                    VehicleTransform.renderRoot(v.location,d),
+                    renderRoot(v,d),
                     EntityType.valueOf("ITEM_DISPLAY"));
             tag(v.chestDisplay,v.id);
             fixed(v.chestDisplay);
@@ -61,7 +61,7 @@ final class VehicleChestRenderer {
         // Both tractor and accessory ItemDisplays MUST teleport to the same
         // root on the same tick. The visible chest offset and orientation
         // are baked into its local matrix, not into entity world position.
-        v.chestDisplay.teleport(VehicleTransform.renderRoot(v.location,d));
+        v.chestDisplay.teleport(renderRoot(v,d));
         if(v.chestHitbox!=null&&v.chestHitbox.isValid()){
             VehicleChestDefinition c=d.inventory.chest;
             v.chestHitbox.teleport(position(v,d).add(0,c.clickHeight/2,0));
@@ -92,6 +92,11 @@ final class VehicleChestRenderer {
         }catch(Exception e){
             plugin.getLogger().warning("Cannot update chest accessory tilt "+v.id+": "+e.getMessage());
         }
+    }
+
+    /** Same world anchor, yaw and update tick as the mounted tractor display. */
+    static Location renderRoot(VehicleInstance v,VehicleDefinition d){
+        return VehicleTransform.renderRoot(v.location,d);
     }
 
     static Location position(VehicleInstance v,VehicleDefinition d){
