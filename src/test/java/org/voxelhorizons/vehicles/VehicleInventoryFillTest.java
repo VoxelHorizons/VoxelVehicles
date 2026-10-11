@@ -79,9 +79,9 @@ public class VehicleInventoryFillTest {
         assertEquals(Material.GLASS,slots[9].getType());
     }
 
-    @Test public void fullCargoPreservesOriginalRemainingItems(){
+    @Test public void fullCargoWithDifferentItemPreservesRemainingItems(){
         final ItemStack[] slots=new ItemStack[27];
-        slots[4]=new ItemStack(Material.STONE,64);
+        slots[4]=new ItemStack(Material.DIRT,64);
         Inventory inventory=(Inventory)Proxy.newProxyInstance(
                 Inventory.class.getClassLoader(),new Class<?>[]{Inventory.class},
                 (proxy,method,args)->{
@@ -95,6 +95,7 @@ public class VehicleInventoryFillTest {
                 Collections.singletonList(4),input);
         assertEquals(12,leftover.getAmount());
         assertEquals(12,input.getAmount());
+        assertEquals(Material.DIRT,slots[4].getType());
         assertEquals(64,slots[4].getAmount());
     }
 }
