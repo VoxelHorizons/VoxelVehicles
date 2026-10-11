@@ -51,6 +51,21 @@ public class VehicleChunkIndexTest {
         assertFalse(near.contains(distant));
     }
 
+    @Test public void clickingAnOffsetVehicleUsesHitboxCentreNotDistantOrigin(){
+        VehicleChunkIndex originIndex=new VehicleChunkIndex();
+        VehicleChunkIndex clickIndex=new VehicleChunkIndex();
+        UUID world=UUID.randomUUID(),tractor=UUID.randomUUID();
+        // Authored visual/hitbox offsets can place the interaction centre
+        // several chunks away from the physics origin.
+        originIndex.update(tractor,world,0.5,0.5);
+        clickIndex.update(tractor,world,48.5,0.5);
+        assertFalse(originIndex.nearby(world,48.5,0.5,13).contains(tractor));
+        assertTrue(clickIndex.nearby(world,48.5,0.5,13).contains(tractor));
+        // Content reload can move the authored hitbox without moving vehicle.
+        clickIndex.update(tractor,world,64.5,0.5);
+        assertTrue(clickIndex.nearby(world,64.5,0.5,13).contains(tractor));
+    }
+
     @Test public void removalAndReseatingDoNotLeaveStaleEntries(){
         VehicleChunkIndex chunks=new VehicleChunkIndex();
         UUID world=UUID.randomUUID(),id=UUID.randomUUID();
