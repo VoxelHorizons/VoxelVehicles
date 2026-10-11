@@ -1,6 +1,10 @@
 package org.voxelhorizons.vehicles;
 
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.entity.Entity;
+import org.bukkit.inventory.ItemStack;
+import java.lang.reflect.Proxy;
 import org.junit.Test;
 import org.voxelhorizons.content.ContentID;
 import org.voxelhorizons.content.item.ItemDefinition;
@@ -104,6 +108,30 @@ public class VehicleChestRenderAlignmentTest {
     private static double distanceSquared(Location a,Location b){
         double dx=a.getX()-b.getX(),dy=a.getY()-b.getY(),dz=a.getZ()-b.getZ();
         return dx*dx+dy*dy+dz*dz;
+    }
+
+    @Test public void maintenanceRepairsMissingChestAccessoryWithoutRefreshingHealthyOne(){
+        VehicleDefinition d=definition(true);
+        VehicleInstance v=vehicle(0);
+        assertFalse(VehicleManager.missingChestAccessory(v,d)); // not upgraded
+
+        v.installedChest=new ItemStack(Material.CHEST);
+        assertTrue(VehicleManager.missingChestAccessory(v,d));
+
+        v.chestDisplay=validEntity();
+        assertTrue(VehicleManager.missingChestAccessory(v,d)); // clickbox lost
+        v.chestHitbox=validEntity();
+        assertFalse(VehicleManager.missingChestAccessory(v,d));
+    }
+
+    private static Entity validEntity(){
+        return (Entity)Proxy.newProxyInstance(Entity.class.getClassLoader(),
+                new Class<?>[]{Entity.class},(proxy,method,args)->{
+                    if(method.getName().equals("isValid"))return true;
+                    if(method.getName().equals("equals"))return proxy==args[0];
+                    if(method.getName().equals("hashCode"))return System.identityHashCode(proxy);
+                    throw new UnsupportedOperationException(method.getName());
+                });
     }
 
     @Test public void worldPositionChangesDoNotChangeLocalMountOffset(){
