@@ -26,23 +26,25 @@ final class VehicleInventoryDefinition {
     /** null means inherit the plugin-wide fill metadata setting. */
     final Boolean copyFillPreviewMeta;
     final String title,storageTitle;
+    final VehicleChestDefinition chest;
 
     private VehicleInventoryDefinition(boolean enabled,boolean storageEnabled,int rows,ContentID previewItem,
             Integer previewSlot,String fillItem,List<Integer> storageSlots,Boolean copyFillPreviewMeta,
-            String title,String storageTitle){
+            String title,String storageTitle,VehicleChestDefinition chest){
         this.enabled=enabled;this.storageEnabled=storageEnabled;this.rows=rows;this.previewItem=previewItem;
         this.previewSlot=previewSlot;this.fillItem=fillItem;
         this.storageSlots=storageSlots==null?null:Collections.unmodifiableList(new ArrayList<Integer>(storageSlots));
         this.copyFillPreviewMeta=copyFillPreviewMeta;
-        this.title=title;this.storageTitle=storageTitle;
+        this.title=title;this.storageTitle=storageTitle;this.chest=chest;
     }
 
     static VehicleInventoryDefinition parse(ContentID id,Object raw){
-        if(raw==null)return new VehicleInventoryDefinition(true,false,0,null,null,null,null,null,null,null);
+        if(raw==null)return new VehicleInventoryDefinition(true,false,0,null,null,null,null,null,null,null,
+                VehicleChestDefinition.parse(id,null));
         if(!(raw instanceof Map))throw bad(id,"inventory must be a mapping");
         Map<?,?> data=(Map<?,?>)raw;
         Set<String> keys=new HashSet<String>();
-        Collections.addAll(keys,"enabled","storage_enabled","rows","preview_item","preview-slot","fill-item","storage-slots","fill-copy-preview-meta","title","storage_title");
+        Collections.addAll(keys,"enabled","storage_enabled","rows","preview_item","preview-slot","fill-item","storage-slots","fill-copy-preview-meta","title","storage_title","chest");
         for(Object key:data.keySet())
             if(!keys.contains(key))throw bad(id,"unknown inventory property "+key);
         Object enabled=data.get("enabled");
@@ -106,9 +108,13 @@ final class VehicleInventoryDefinition {
         String withStorage=title(id,data.get("storage_title"),"storage_title");
         return new VehicleInventoryDefinition(!Boolean.FALSE.equals(enabled),
                 !Boolean.FALSE.equals(storageEnabled)&&storageRows>0,
-                storageRows,preview,previewSlot,fillItem,customSlots,copyFillPreviewMeta,title,withStorage);
+                storageRows,preview,previewSlot,fillItem,customSlots,copyFillPreviewMeta,title,withStorage,
+                VehicleChestDefinition.parse(id,data.get("chest")));
     }
     int effectiveStorageRows(){return storageEnabled?rows:0;}
+    int effectiveStorageRows(VehicleInstance vehicle){
+        return storageEnabled&&(!chest.enabled||vehicle.chestInstalled())?rows:0;
+    }
 
     private static String title(ContentID id,Object raw,String field){
         if(raw==null)return null;
