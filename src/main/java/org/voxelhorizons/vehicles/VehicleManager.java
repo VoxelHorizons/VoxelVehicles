@@ -292,7 +292,7 @@ public final class VehicleManager {
                 dirty=true;
                 renderer.move(v,d);
                 if(v.driver==null){
-                    deindex(v);renderer.unseat(v);index(v);iter.remove();
+                    deindex(v);renderer.unseat(v,d);index(v);iter.remove();
                 }
             }
         }
