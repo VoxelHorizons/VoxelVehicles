@@ -24,8 +24,9 @@ final class VehicleRenderer {
         try {
             display=at.getWorld().spawnEntity(at,EntityType.valueOf("ITEM_DISPLAY"));
             invoke(display,"setItemStack",ItemStack.class,item);
+            applyFixedTransform(display);
             invokeOptional(display,"setTeleportDuration",int.class,plugin.getConfig().getInt("render.interpolation-ticks",1));
-            invokeOptional(display,"setViewRange",float.class,definition.viewDistance);
+            invokeOptional(display,"setViewRange",float.class,definition.viewDistance/64.0f);
             applyScale(display,definition.scale);
             tag(display,vehicle.id);
             hitbox=at.getWorld().spawnEntity(hitLocation(at,definition),EntityType.valueOf("INTERACTION"));
@@ -92,13 +93,20 @@ final class VehicleRenderer {
                 d.seatX*sin+d.seatZ*cos);
     }
 
+    @SuppressWarnings({"rawtypes","unchecked"})
+    private static void applyFixedTransform(Entity display) throws Exception {
+        Class<?> kind=Class.forName("org.bukkit.entity.ItemDisplay$ItemDisplayTransform");
+        Object fixed=Enum.valueOf((Class)kind.asSubclass(Enum.class),"FIXED");
+        display.getClass().getMethod("setItemDisplayTransform",kind).invoke(display,fixed);
+    }
+
     private static void applyScale(Entity display,double size) throws Exception{
-        Object transform=display.getClass().getMethod("getTransformation").invoke(display);
-        Object vec=transform.getClass().getMethod("getScale").invoke(transform);
-        vec.getClass().getMethod("set",float.class,float.class,float.class)
-                .invoke(vec,(float)size,(float)size,(float)size);
-        Method setter=display.getClass().getMethod("setTransformation",transform.getClass());
-        setter.invoke(display,transform);
+        if(size==1)return;
+        Class<?> matrix=Class.forName("org.joml.Matrix4f");
+        Object value=matrix.getConstructor().newInstance();
+        matrix.getMethod("scale",float.class,float.class,float.class)
+                .invoke(value,(float)size,(float)size,(float)size);
+        display.getClass().getMethod("setTransformationMatrix",matrix).invoke(display,value);
     }
     private static void invoke(Object entity,String name,Class<?> type,Object value) throws Exception{
         entity.getClass().getMethod(name,type).invoke(entity,value);
