@@ -31,9 +31,17 @@ inventory:
     without-storage: "&f:offset_-8::vehicle_inventory:"
     with-storage: "&f:offset_-8::vehicle_inventory_storage:"
 
-  # The preview is a standard VoxelCore-rendered item. To fill the dark 3x3
-  # region, give the selected item model an enlarged display.gui transform.
-  preview-slot: 11
+  # Your shifted overlay puts the preview one column further LEFT.
+  # Slot indices are 0-based: 10 = middle row, second column.
+  # To fill the preview panel, give its model an enlarged display.gui transform.
+  preview-slot: 10
+
+  # Render an invisible VoxelCore item in every protected slot (all slots
+  # except the preview and enabled cargo). This prevents stray shift-clicks
+  # from treating decorative slots as empty. Accepts an item ID OR a model
+  # reference; the latter resolves to its uniquely matching VoxelCore item.
+  # Set to "" to leave decorative slots empty (still protected).
+  fill-item: "voxel:ui/blank"
 
   # Five storage slots per row, retaining the original 3x5 layout.
   # Vehicles choose inventory.rows: 0-6. Only slots belonging to their
