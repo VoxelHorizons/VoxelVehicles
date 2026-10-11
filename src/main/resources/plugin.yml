@@ -9,7 +9,7 @@ commands:
   voxelvehicles:
     aliases: [vv]
     description: Vehicle administration.
-    usage: /vv <inventory|spawn|remove|reload|list>
+    usage: /vv <inventory|chest remove|spawn|remove|reload|list>
 permissions:
   voxelvehicles.admin:
     default: op
