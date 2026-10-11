@@ -23,6 +23,7 @@ public final class VehicleManager {
     private final VehicleStore store;
     private final VehicleRenderer renderer;
     private final VehicleParticles particles;
+    private final VehiclePerformance performance=new VehiclePerformance();
     private VehicleInventories inventories;
     private final Map<UUID,VehicleInstance> instances=new LinkedHashMap<UUID,VehicleInstance>();
     private final Map<UUID,UUID> entityIndex=new HashMap<UUID,UUID>();
@@ -353,6 +354,8 @@ public final class VehicleManager {
     }
 
     private void tick(){
+        long started=System.nanoTime();
+        int sent=0,avoided=0;
         if(core.getContentRuntime().current().revision()!=revision) {
             try{refreshDefinitions();}catch(RuntimeException e){
                 plugin.getLogger().warning("Vehicle definitions reload rejected: "+e.getMessage());
@@ -433,12 +436,24 @@ public final class VehicleManager {
             // visual model changes, never the passenger or hitbox orientation.
             if(v.driver!=null&&VehicleSuspension.update(v,d,terrain))
                 renderer.updateTilt(v,d);
+            long teleportCounts=v.teleports.drainCounts();
+            sent+=(int)(teleportCounts>>>32);
+            avoided+=(int)teleportCounts;
         }
         // Effects use the same single server tick: no per-vehicle timers or entities.
         particles.tick(instances.values(),definitions,ticks);
         int interval=Math.max(20,plugin.getConfig().getInt("physics.autosave-ticks",200));
         if(++ticks%interval==0&&dirty)save();
+        performance.record(System.nanoTime()-started,occupied.size(),
+                terrainFrame.decodedBlocks(),terrainFrame.reusedBlocks(),sent,avoided);
     }
+
+    String[] performanceReport(){
+        int active=0;
+        for(VehicleInstance v:instances.values())if(v.active())active++;
+        return performance.lines(active,instances.size());
+    }
+
     public void save(){
         if(inventories!=null)inventories.captureOpen();
         try{store.save(instances);dirty=false;}catch(IOException e){plugin.getLogger().severe("Vehicle save failed: "+e.getMessage());}
