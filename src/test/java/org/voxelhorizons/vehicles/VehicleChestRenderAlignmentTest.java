@@ -90,14 +90,20 @@ public class VehicleChestRenderAlignmentTest {
         v.visualRoll=-12;
         Location tilted=VehicleChestRenderer.position(v,d);
         Location visual=VehicleTransform.visual(v.location,d);
-        assertTrue(normal.distanceSquared(tilted)>1e-4);
+        assertTrue(distanceSquared(normal,tilted)>1e-4);
         double expectedDistance=Math.pow(d.inventory.chest.x,2)
                 +Math.pow(d.inventory.chest.y,2)
                 +Math.pow(d.inventory.chest.z,2);
-        assertEquals(expectedDistance,tilted.distanceSquared(visual),1e-6);
+        assertEquals(expectedDistance,distanceSquared(tilted,visual),1e-6);
         // Tilt must not move the tractor/chest shared ItemDisplay ROOT.
         Location tractorRoot=VehicleTransform.renderRoot(v.location,d);
-        assertEquals(0,tractorRoot.distanceSquared(VehicleChestRenderer.renderRoot(v,d)),1e-8);
+        assertEquals(0,distanceSquared(tractorRoot,VehicleChestRenderer.renderRoot(v,d)),1e-8);
+    }
+
+    /** Headless tests use Location(null,..), which Bukkit.distanceSquared rejects. */
+    private static double distanceSquared(Location a,Location b){
+        double dx=a.getX()-b.getX(),dy=a.getY()-b.getY(),dz=a.getZ()-b.getZ();
+        return dx*dx+dy*dy+dz*dz;
     }
 
     @Test public void worldPositionChangesDoNotChangeLocalMountOffset(){
