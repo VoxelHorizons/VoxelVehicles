@@ -29,6 +29,8 @@ public final class VehicleManager {
     private final Map<UUID,UUID> entityIndex=new HashMap<UUID,UUID>();
     // Dedicated hot path: never scan unloaded or parked instances each server tick.
     private final Map<UUID,VehicleInstance> occupied=new LinkedHashMap<UUID,VehicleInstance>();
+    // Parked/unloaded vehicles without emitters never enter the hot effect loop.
+    private final Map<UUID,VehicleInstance> particleSources=new LinkedHashMap<UUID,VehicleInstance>();
     private Map<ContentID,VehicleDefinition> definitions=Collections.emptyMap();
     private long revision=-1;
     private long ticks;
@@ -335,6 +337,10 @@ public final class VehicleManager {
         index(v);
     }
     private void index(VehicleInstance v){
+        VehicleDefinition definition=definitions.get(v.type);
+        if(v.active()&&definition!=null&&!definition.particles.isEmpty())
+            particleSources.put(v.id,v);
+        else particleSources.remove(v.id);
         if(v.display!=null)entityIndex.put(v.display.getUniqueId(),v.id);
         if(v.hitbox!=null)entityIndex.put(v.hitbox.getUniqueId(),v.id);
         if(v.seat!=null)entityIndex.put(v.seat.getUniqueId(),v.id);
@@ -342,6 +348,7 @@ public final class VehicleManager {
         if(v.chestHitbox!=null)entityIndex.put(v.chestHitbox.getUniqueId(),v.id);
     }
     private void deindex(VehicleInstance v){
+        particleSources.remove(v.id);
         if(v.display!=null)entityIndex.remove(v.display.getUniqueId());
         if(v.hitbox!=null)entityIndex.remove(v.hitbox.getUniqueId());
         if(v.seat!=null)entityIndex.remove(v.seat.getUniqueId());
@@ -441,7 +448,7 @@ public final class VehicleManager {
             avoided+=(int)teleportCounts;
         }
         // Effects use the same single server tick: no per-vehicle timers or entities.
-        particles.tick(instances.values(),definitions,ticks);
+        particles.tick(particleSources.values(),definitions,ticks);
         int interval=Math.max(20,plugin.getConfig().getInt("physics.autosave-ticks",200));
         if(++ticks%interval==0&&dirty)save();
         performance.record(System.nanoTime()-started,occupied.size(),
@@ -462,6 +469,6 @@ public final class VehicleManager {
         if(inventories!=null)inventories.shutdown();
         save();
         for(VehicleInstance v:instances.values())renderer.deactivate(v);
-        occupied.clear();entityIndex.clear();
+        occupied.clear();particleSources.clear();entityIndex.clear();
     }
 }
