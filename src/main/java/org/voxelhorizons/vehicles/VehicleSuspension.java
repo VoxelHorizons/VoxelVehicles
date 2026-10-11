@@ -11,18 +11,19 @@ final class VehicleSuspension {
     private VehicleSuspension(){}
 
     static void initialize(VehicleInstance vehicle,VehicleDefinition definition){
-        update(vehicle,definition,true);
+        update(vehicle,definition,new VehicleTerrain.Space(vehicle.location.getWorld()),true);
     }
 
-    static boolean update(VehicleInstance vehicle,VehicleDefinition definition){
-        return update(vehicle,definition,false);
+    static boolean update(VehicleInstance vehicle,VehicleDefinition definition,
+            VehicleTerrain.Space space){
+        return update(vehicle,definition,space,false);
     }
 
-    private static boolean update(VehicleInstance vehicle,VehicleDefinition definition,boolean immediate){
+    private static boolean update(VehicleInstance vehicle,VehicleDefinition definition,
+            VehicleTerrain.Space space,boolean immediate){
         double smoothing=immediate?1.0:definition.tiltSmoothing;
         if(definition.type!=VehicleDefinition.Type.LAND)return level(vehicle,smoothing);
         Location base=VehicleTransform.collisionBase(vehicle.location,definition);
-        VehicleTerrain.Space space=new VehicleTerrain.Space(base.getWorld());
         double angle=Math.toRadians(base.getYaw());
         double forwardX=-Math.sin(angle), forwardZ=Math.cos(angle);
         double rightX=Math.cos(angle), rightZ=Math.sin(angle);
