@@ -20,6 +20,8 @@ maintenance:
 # Chest GUI: title glyphs are resolved by VoxelCore at open time.
 # These are defaults only: change them to any authored VoxelCore font aliases.
 inventory:
+  # Minimum chest GUI height to fit the model preview panel. Individual
+  # vehicles choose storage row count with properties.vehicle.inventory.rows.
   rows: 3
   titles:
     without-storage: "&f:offset_-8::vehicle_inventory:"
@@ -29,8 +31,10 @@ inventory:
   # region, give the selected item model an enlarged display.gui transform.
   preview-slot: 11
 
-  # GUI slots in screenshot order (0-based). Storage exists ONLY when that
-  # vehicle has inventory.storage_size > 0 in its VoxelCore definition.
+  # Five storage slots per row, retaining the original 3x5 layout.
+  # Vehicles choose inventory.rows: 0-6. Only slots belonging to their
+  # selected storage rows unlock; row 0 means a preview-only interface.
+  # Rows 4-6 require extended resource-pack background overlays.
   storage-slots:
     - 4
     - 5
@@ -47,3 +51,19 @@ inventory:
     - 24
     - 25
     - 26
+    # Optional rows 4, 5 and 6 (existing first three rows unchanged).
+    - 31
+    - 32
+    - 33
+    - 34
+    - 35
+    - 40
+    - 41
+    - 42
+    - 43
+    - 44
+    - 49
+    - 50
+    - 51
+    - 52
+    - 53
