@@ -75,3 +75,30 @@ Older than 1.19.4: this build disables itself when display entities are absent. 
 2. Introduce version-specific input and passenger adapters for earlier supported server versions, without forcing ProtocolLib on 26.2.
 3. Improve collision sampling using voxel shapes, ramps/slabs, water and gravity, plus multi-seat support.
 4. Convert HavenVehicles vehicle definitions, variants and trailers, then test migration against copied worlds and a performance benchmark.
+
+
+## Vehicle offsets, rendering, pickup and cleanup
+
+The `properties.vehicle` mapping now supports a **global local-space offset**.
+It moves the visual, interaction hitbox and driver seat as one assembly.
+The hitbox and seat offsets are measured relative to this translated/rotated visual origin:
+
+```yaml
+properties:
+  vehicle:
+    type: LAND
+    offset: {x: 0.0, y: 0.0, z: 0.0, rotation: 0}
+    hitbox:
+      width: 1.8
+      height: 1.6
+      offset: {x: 0.0, y: 0.0, z: 0.0}
+    seat: {x: 0.0, y: -0.7, z: 0.0}
+```
+
+For a tractor, set `offset.y: -0.25` to lower the *whole* model/collision/seat assembly; adjust `seat.y` separately to move just the driver. `rotation` is degrees around the Y axis in addition to the driving direction. The visual and hitbox follow the same yaw and offsets; the vehicle's physics direction does not change.
+
+While occupied, the invisible driver seat rides the visible ItemDisplay, and the player rides the seat. The display is the only movement root, avoiding independently teleporting the model and rider. If a server rejects that link, VoxelVehicles logs a warning and uses the older fallback. This needs real-client validation, especially when using unusual model transforms.
+
+**Left-click / punch** an unoccupied owned vehicle to pick it up as a dropped VoxelCore item; admins with `voxelvehicles.admin` can also pick it up. An arm-swing ray test works even where the Interaction entity does not fire Bukkit damage events. `/vv remove` deletes a nearby instance without an item drop.
+
+**Live reload:** after `/vc admin content reload`, the plugin sees the updated VoxelCore revision and refreshes loaded vehicles' models, scale, offsets and hitboxes automatically on the next tick; unloaded vehicles refresh when their chunk loads. `/vv sync` triggers a refresh manually and `/vv cleanup` removes stale tagged vehicle entities in already loaded chunks. A periodic repair/orphan sweep runs every `maintenance.cleanup-ticks` (default 600).
