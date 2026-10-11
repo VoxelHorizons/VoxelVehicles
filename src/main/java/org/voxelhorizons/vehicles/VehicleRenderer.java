@@ -6,6 +6,7 @@ import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.voxelhorizons.content.ContentID;
 import java.util.UUID;
 
 /**
@@ -20,7 +21,8 @@ import java.util.UUID;
  */
 final class VehicleRenderer {
     private final VoxelVehicles plugin;
-    VehicleRenderer(VoxelVehicles plugin){this.plugin=plugin;}
+    private final VehicleChestRenderer chest;
+    VehicleRenderer(VoxelVehicles plugin){this.plugin=plugin;this.chest=new VehicleChestRenderer(plugin);}
 
     void activate(VehicleInstance vehicle, VehicleDefinition definition){
         Location at=VehicleTransform.renderRoot(vehicle.location,definition);
@@ -40,6 +42,7 @@ final class VehicleRenderer {
         }catch(Exception error){
             if(display!=null)display.remove();
             if(hitbox!=null)hitbox.remove();
+            chest.remove(vehicle);
             vehicle.display=null;vehicle.hitbox=null;
             throw new IllegalStateException("Could not spawn modern vehicle entities",error);
         }
@@ -49,7 +52,11 @@ final class VehicleRenderer {
     void refresh(VehicleInstance vehicle,VehicleDefinition definition) throws Exception{
         if(vehicle.display==null||!vehicle.display.isValid()
                 ||vehicle.hitbox==null||!vehicle.hitbox.isValid())return;
-        ItemStack item=plugin.core().getItemManager().createRenderItem(definition.model);
+        ContentID model=definition.model;
+        if(definition.inventory.chest.enabled&&vehicle.chestInstalled()
+                &&definition.inventory.chest.mode==VehicleChestDefinition.VisualMode.MODEL_SWAP)
+            model=definition.inventory.chest.alternateModel;
+        ItemStack item=plugin.core().getItemManager().createRenderItem(model);
         if(vehicle.dyeColor!=null&&plugin.core().getItemManager().isDyeable(item))
             item=plugin.core().getItemManager().setDyeColor(item,vehicle.dyeColor.intValue());
         invoke(vehicle.display,"setItemStack",ItemStack.class,item);
@@ -61,6 +68,7 @@ final class VehicleRenderer {
         invoke(vehicle.hitbox,"setInteractionHeight",float.class,(float)definition.height);
         invokeOptional(vehicle.hitbox,"setResponsive",boolean.class,true);
         applyMatrix(vehicle.display,definition,vehicle.visualPitch,vehicle.visualRoll);
+        chest.refresh(vehicle,definition);
         move(vehicle,definition);
     }
 
@@ -72,6 +80,7 @@ final class VehicleRenderer {
                     Math.max(0,Math.min(5,plugin.getConfig().getInt("render.tilt-interpolation-ticks",2))));
             invokeOptional(vehicle.display,"setInterpolationDelay",int.class,-1);
             applyMatrix(vehicle.display,definition,vehicle.visualPitch,vehicle.visualRoll);
+            chest.tilt(vehicle,definition);
         }catch(Exception error){
             plugin.getLogger().warning("Could not tilt vehicle model "+vehicle.id+": "+error.getMessage());
         }
@@ -97,6 +106,7 @@ final class VehicleRenderer {
         }
         if(vehicle.hitbox!=null&&vehicle.hitbox.isValid())
             vehicle.hitbox.teleport(VehicleTransform.hitbox(vehicle.location,definition));
+        chest.move(vehicle,definition);
     }
 
     boolean seat(VehicleInstance v,VehicleDefinition d,Player player){
@@ -171,6 +181,7 @@ final class VehicleRenderer {
 
     void deactivate(VehicleInstance v){
         unseat(v,null);
+        chest.remove(v);
         if(v.display!=null){v.display.remove();v.display=null;}
         if(v.hitbox!=null){v.hitbox.remove();v.hitbox=null;}
     }
