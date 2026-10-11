@@ -115,6 +115,48 @@ public class VehicleInventoryDefinitionTest {
         parse(data);
     }
 
+    @Test public void tractorCanOverrideAllSixStorageSlotsPerRow(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("rows",3);
+        data.put("preview-slot",10);
+        List<Integer> desired=Arrays.asList(
+                3,4,5,6,7,8,12,13,14,15,16,17,21,22,23,24,25,26);
+        data.put("storage-slots",desired);
+        data.put("fill-copy-preview-meta",true);
+        VehicleInventoryDefinition d=parse(data);
+        assertEquals(desired,d.storageSlots);
+        assertEquals(Boolean.TRUE,d.copyFillPreviewMeta);
+        assertEquals(18,VehicleInventories.storageSlots(d.storageSlots,
+                d.effectiveStorageRows(),d.previewSlot,27).size());
+    }
+
+    @Test public void storageSlotsDefaultToGlobalConfigWhenUnset(){
+        VehicleInventoryDefinition d=parse(Collections.<String,Object>emptyMap());
+        assertNull(d.storageSlots);
+        assertNull(d.copyFillPreviewMeta);
+    }
+
+    @Test(expected=UnsupportedOperationException.class)
+    public void perVehicleStorageSlotsCannotMutateAfterParsing(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("storage-slots",Arrays.asList(3,4,5));
+        parse(data).storageSlots.add(6);
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void rejectDuplicateVehicleStorageSlots(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("storage-slots",Arrays.asList(3,3,4));
+        parse(data);
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void rejectInvalidStorageSlotTypes(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("storage-slots",Arrays.asList(3,"23",4));
+        parse(data);
+    }
+
     @Test public void allSixRowsSupported(){
         Map<String,Object> data=new HashMap<String,Object>();
         data.put("rows",6);
