@@ -126,6 +126,11 @@ final class VehicleListener implements Listener {
                 ||!d.inventory.storageEnabled||d.inventory.rows<1)return false;
         ItemStack hand=player.getInventory().getItemInMainHand();
         if(hand==null||hand.getType()!=d.inventory.chest.item)return false;
+        if(!vehicle.owner.equals(player.getUniqueId())
+                &&!player.hasPermission("voxelvehicles.admin")){
+            player.sendMessage("§cOnly the owner can install a chest on this vehicle.");
+            return true;
+        }
         if(vehicle.chestInstalled()){
             openInventory(player,vehicle);
             return true;
