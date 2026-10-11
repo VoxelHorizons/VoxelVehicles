@@ -1,0 +1,65 @@
+package org.voxelhorizons.vehicles;
+
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.voxelhorizons.content.ContentID;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.util.Map;
+import java.util.UUID;
+
+/** Durable logical instances: entity IDs are never serialized. */
+final class VehicleStore {
+    private final File file;
+    VehicleStore(File file){this.file=file;}
+
+    void load(Map<UUID,VehicleInstance> vehicles){
+        if(!file.isFile())return;
+        YamlConfiguration config=YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection section=config.getConfigurationSection("vehicles");
+        if(section==null)return;
+        for(String key:section.getKeys(false)){
+            try{
+                UUID id=UUID.fromString(key);
+                String worldName=section.getString(key+".world");
+                World world=Bukkit.getWorld(worldName);
+                if(world==null)throw new IllegalStateException("World unavailable: "+worldName);
+                ContentID type=ContentID.parse(section.getString(key+".type"),"voxel");
+                UUID owner=UUID.fromString(section.getString(key+".owner"));
+                double x=section.getDouble(key+".x"),y=section.getDouble(key+".y"),z=section.getDouble(key+".z");
+                float yaw=(float)section.getDouble(key+".yaw");
+                if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(z))throw new IllegalArgumentException("Non-finite location");
+                vehicles.put(id,new VehicleInstance(id,type,owner,new Location(world,x,y,z,yaw,0)));
+            }catch(Exception error){
+                Bukkit.getLogger().warning("[VoxelVehicles] Skipping invalid saved vehicle "+key+": "+error.getMessage());
+            }
+        }
+    }
+
+    void save(Map<UUID,VehicleInstance> vehicles) throws IOException{
+        YamlConfiguration config=new YamlConfiguration();
+        config.set("format",1);
+        for(VehicleInstance v:vehicles.values()){
+            String k="vehicles."+v.id+".";
+            config.set(k+"type",v.type.toString());
+            config.set(k+"owner",v.owner.toString());
+            config.set(k+"world",v.location.getWorld().getName());
+            config.set(k+"x",v.location.getX());config.set(k+"y",v.location.getY());
+            config.set(k+"z",v.location.getZ());config.set(k+"yaw",v.location.getYaw());
+        }
+        File parent=file.getParentFile();
+        if(parent!=null&&!parent.exists()&&!parent.mkdirs())throw new IOException("Cannot create "+parent);
+        File temp=new File(parent,file.getName()+".tmp");
+        config.save(temp);
+        try{Files.move(temp.toPath(),file.toPath(),StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE);}
+        catch(java.nio.file.AtomicMoveNotSupportedException ex){
+            Files.move(temp.toPath(),file.toPath(),StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+}

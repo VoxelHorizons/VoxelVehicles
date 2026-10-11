@@ -1,0 +1,51 @@
+name: Build VoxelVehicles
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout VoxelCore
+        uses: actions/checkout@v4
+        with:
+          repository: VoxelHorizons/VoxelCore
+          path: VoxelCore
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Install VoxelCore API
+        run: mvn -U -f VoxelCore/pom.xml install -DskipTests
+      - name: Build and test
+        run: mvn -U clean verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VoxelVehicles-mc1.19.4-26.2
+          path: target/VoxelVehicles-*.jar
+          if-no-files-found: error
+
+  publish:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: VoxelVehicles-mc1.19.4-26.2
+          path: release
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0-SNAPSHOT
+          name: VoxelVehicles v1.0-SNAPSHOT
+          prerelease: true
+          overwrite_files: true
+          files: release/VoxelVehicles-*.jar
