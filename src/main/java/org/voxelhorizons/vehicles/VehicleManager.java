@@ -309,17 +309,20 @@ public final class VehicleManager {
             double dx=VehiclePhysics.dx(v.motion.yaw)*v.motion.speed;
             double dz=VehiclePhysics.dz(v.motion.yaw)*v.motion.speed;
             double dy=0;
+            // One block-shape snapshot per occupied vehicle per tick, reused
+            // for ground contact, step-up and four-wheel suspension sampling.
+            VehicleTerrain.Space terrain=new VehicleTerrain.Space(v.location.getWorld());
             if(d.type==VehicleDefinition.Type.PLANE) {
                 dy=v.input.jump?d.climbSpeed:v.input.sneak?-d.climbSpeed:0;
                 dx*=d.flySpeed/d.speed;dz*=d.flySpeed/d.speed;
             }else{
                 // Gravity only when unsupported. Avoid loading chunks under the vehicle.
                 Location below=v.location.clone().add(0,-0.12,0);
-                if(VehicleCollision.clear(below,d))dy=-0.12;
+                if(VehicleCollision.clear(below,d,terrain))dy=-0.12;
             }
             Location old=v.location;
             Location next=VehicleCollision.step(v,d,dx,dy,dz,
-                    Math.max(0.05,plugin.getConfig().getDouble("physics.max-substep",0.25)));
+                    Math.max(0.05,plugin.getConfig().getDouble("physics.max-substep",0.25)),terrain);
             next.setYaw(v.motion.yaw);
             if(!old.equals(next)){
                 v.location=next;
@@ -331,7 +334,7 @@ public final class VehicleManager {
             }
             // Sample the four wheel positions each occupied tick. Only the
             // visual model changes, never the passenger or hitbox orientation.
-            if(v.driver!=null&&VehicleSuspension.update(v,d))
+            if(v.driver!=null&&VehicleSuspension.update(v,d,terrain))
                 renderer.updateTilt(v,d);
         }
         int interval=Math.max(20,plugin.getConfig().getInt("physics.autosave-ticks",200));
