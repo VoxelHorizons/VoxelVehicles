@@ -103,6 +103,6 @@ public class VehicleTerrainFrameTest {
         space.block(65535,320,65535);
         space.block(-65535,320,-65535);
         assertEquals(4,world.shapeLookups.get());
-        assertEquals(4,world.loadedChecks.get());
+        assertEquals(3,world.loadedChecks.get());
     }
 }
