@@ -70,7 +70,8 @@ final class VehicleInventories implements Listener {
         // A vehicle selects storage rows (0=no storage); the configured GUI
         // has a minimum height to preserve the authored model preview panel.
         int minimumRows=plugin.getConfig().getInt("inventory.rows",3);
-        int rows=Math.max(minimumRows,definition.inventory.rows);
+        int storageRows=definition.inventory.effectiveStorageRows();
+        int rows=Math.max(minimumRows,storageRows);
         int size=rows*9;
         int preview=plugin.getConfig().getInt("inventory.preview-slot",11);
         if(minimumRows<1||minimumRows>6||preview<0||preview>=size){
@@ -79,19 +80,19 @@ final class VehicleInventories implements Listener {
         List<Integer> cargo;
         try{
             cargo=storageSlots(plugin.getConfig().getIntegerList("inventory.storage-slots"),
-                    definition.inventory.rows,preview,size);
+                    storageRows,preview,size);
         }catch(IllegalArgumentException error){
             player.sendMessage("§cInvalid vehicle storage layout: "+error.getMessage());
             return false;
         }
-        if(definition.inventory.rows>0&&cargo.isEmpty()){
+        if(storageRows>0&&cargo.isEmpty()){
             player.sendMessage("§cVehicle storage rows have no assigned slots.");
             return false;
         }
-        String raw=definition.inventory.rows==0
+        String raw=storageRows==0
                 ?definition.inventory.title:definition.inventory.storageTitle;
         if(raw==null)raw=plugin.getConfig().getString(
-                definition.inventory.rows==0
+                storageRows==0
                         ?"inventory.titles.without-storage":"inventory.titles.with-storage","Vehicle");
         String title=resolveTitle(player,raw);
         VehicleInventoryHolder holder=new VehicleInventoryHolder(vehicle.id);
