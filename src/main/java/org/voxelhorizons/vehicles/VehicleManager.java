@@ -109,7 +109,7 @@ public final class VehicleManager {
                 try{activate(v,d);}catch(RuntimeException e){
                     plugin.getLogger().warning("Could not repair "+v.id+": "+e.getMessage());
                 }
-            }else if(fullRefresh){
+            }else if(fullRefresh||missingChestAccessory(v,d)){
                 try{
                     VehicleSuspension.initialize(v,d);
                     deindex(v);
@@ -121,6 +121,21 @@ public final class VehicleManager {
                 }
             }
         }
+    }
+
+    /**
+     * Keep the cheap periodic repair path safe: a separately rendered chest
+     * or its clickable Interaction can disappear while the tractor survives.
+     * In that case a one-off refresh is still required, but healthy vehicles
+     * never recreate their models on maintenance ticks.
+     */
+    static boolean missingChestAccessory(VehicleInstance v,VehicleDefinition d){
+        if(d==null||!d.inventory.chest.enabled||!v.chestInstalled()
+                ||d.inventory.chest.mode!=VehicleChestDefinition.VisualMode.ITEM_DISPLAY)
+            return false;
+        return v.chestDisplay==null||!v.chestDisplay.isValid()
+                || (d.inventory.chest.interaction
+                    &&(v.chestHitbox==null||!v.chestHitbox.isValid()));
     }
 
     /** A success or an actionable placement failure; used by item clicks and admin commands. */
