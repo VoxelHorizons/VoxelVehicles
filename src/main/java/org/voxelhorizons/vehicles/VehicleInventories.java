@@ -13,6 +13,7 @@ import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.voxelhorizons.content.item.ItemDefinition;
 import org.voxelhorizons.VoxelCore;
 import org.voxelhorizons.content.ContentID;
@@ -83,8 +84,10 @@ final class VehicleInventories implements Listener {
         }
         List<Integer> cargo;
         try{
-            cargo=storageSlots(plugin.getConfig().getIntegerList("inventory.storage-slots"),
-                    storageRows,preview,size);
+            List<Integer> configuredSlots=definition.inventory.storageSlots!=null
+                    ?definition.inventory.storageSlots
+                    :plugin.getConfig().getIntegerList("inventory.storage-slots");
+            cargo=storageSlots(configuredSlots,storageRows,preview,size);
         }catch(IllegalArgumentException error){
             player.sendMessage("§cInvalid vehicle storage layout: "+error.getMessage());
             return false;
@@ -104,6 +107,20 @@ final class VehicleInventories implements Listener {
         holder.bind(inv);
         for(int i=0;i<cargo.size();i++)if(vehicle.storage[i]!=null)
             inv.setItem(cargo.get(i),vehicle.storage[i].clone());
+        // Construct the preview first so all decorative fillers may inherit
+        // its visible hover title/lore without inheriting its 3D item model.
+        ContentID itemId=definition.inventory.previewItem!=null
+                ?definition.inventory.previewItem:definition.model;
+        ItemStack previewItem;
+        try{
+            previewItem=core.getItemManager().createRenderItem(itemId);
+            if(vehicle.dyeColor!=null&&core.getItemManager().isDyeable(previewItem))
+                previewItem=core.getItemManager().setDyeColor(previewItem,vehicle.dyeColor.intValue());
+            inv.setItem(preview,previewItem);
+        }catch(RuntimeException error){
+            plugin.getLogger().warning("Cannot render vehicle GUI preview "+itemId+": "+error.getMessage());
+            player.sendMessage("§cMissing preview item "+itemId+".");return false;
+        }
         try{
             String configuredFill=definition.inventory.fillItem!=null
                     ?definition.inventory.fillItem
@@ -111,6 +128,10 @@ final class VehicleInventories implements Listener {
             if(configuredFill!=null&&!configuredFill.trim().isEmpty()){
                 ContentID fillId=resolveFillItem(core,configuredFill);
                 ItemStack fill=core.getItemManager().createRenderItem(fillId);
+                boolean copyMeta=definition.inventory.copyFillPreviewMeta!=null
+                        ?definition.inventory.copyFillPreviewMeta.booleanValue()
+                        :plugin.getConfig().getBoolean("inventory.fill-copy-preview-meta",true);
+                if(copyMeta)fill=copyPreviewText(fill,previewItem);
                 for(int slot:decorativeSlots(size,preview,cargo))
                     inv.setItem(slot,fill.clone());
             }
@@ -119,24 +140,13 @@ final class VehicleInventories implements Listener {
             player.sendMessage("§cInvalid vehicle inventory.fill-item: "+error.getMessage());
             return false;
         }
-        ContentID itemId=definition.inventory.previewItem!=null
-                ?definition.inventory.previewItem:definition.model;
-        try{
-            ItemStack item=core.getItemManager().createRenderItem(itemId);
-            if(vehicle.dyeColor!=null&&core.getItemManager().isDyeable(item))
-                item=core.getItemManager().setDyeColor(item,vehicle.dyeColor.intValue());
-            inv.setItem(preview,item);
-        }catch(RuntimeException error){
-            plugin.getLogger().warning("Cannot render vehicle GUI preview "+itemId+": "+error.getMessage());
-            player.sendMessage("§cMissing preview item "+itemId+".");return false;
-        }
         open.put(vehicle.id,new Session(vehicle,player,inv,cargo));
         player.openInventory(inv);
         return true;
     }
 
     /**
-     * Keep the existing five slots per row exactly as configured. Every
+     * Keep the current per-vehicle/global slot list exactly as configured. Every
      * configured slot within the first N rows becomes cargo; there is no
      * separate slot-count setting to keep synchronized with the artwork.
      */
@@ -208,6 +218,25 @@ final class VehicleInventories implements Listener {
 
     private static ContentID resolveFillItem(VoxelCore core,String configured){
         return findFillItem(core.getItemRegistry().entries(),configured);
+    }
+
+    /**
+     * Copy only the visible title and lore. Keep the filler ItemStack's own
+     * VoxelCore identity, model and data components so it stays invisible.
+     * The preview still owns the actual dyeable 3D render.
+     */
+    static ItemStack copyPreviewText(ItemStack filler,ItemStack preview){
+        if(filler==null||preview==null)return filler;
+        ItemStack decorated=filler.clone();
+        ItemMeta fillMeta=decorated.getItemMeta();
+        ItemMeta previewMeta=preview.getItemMeta();
+        if(fillMeta==null)return decorated;
+        fillMeta.setDisplayName(previewMeta!=null&&previewMeta.hasDisplayName()
+                ?previewMeta.getDisplayName():null);
+        fillMeta.setLore(previewMeta!=null&&previewMeta.hasLore()
+                ?new ArrayList<String>(previewMeta.getLore()):null);
+        decorated.setItemMeta(fillMeta);
+        return decorated;
     }
 
     /**
