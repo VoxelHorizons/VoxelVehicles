@@ -14,6 +14,8 @@ public final class VehicleDefinition {
     public final Type type;
     public final boolean publicAccess;
     public final double width, height, hitboxX, hitboxY, hitboxZ;
+    /** Physical movement footprint, never inherited from visual or clickbox offsets. */
+    public final double collisionWidth, collisionHeight, collisionX, collisionY, collisionZ;
     public final double scale, seatX, seatY, seatZ;
     public final double offsetX, offsetY, offsetZ, offsetRotation;
     public final double speed, reverse, acceleration, braking, drag, turnRate, stepHeight, flySpeed, climbSpeed;
@@ -22,6 +24,7 @@ public final class VehicleDefinition {
 
     private VehicleDefinition(ContentID id, ContentID model, ContentID drop, Type type, boolean publicAccess,
             double width, double height, double hitboxX, double hitboxY, double hitboxZ,
+            double collisionWidth, double collisionHeight, double collisionX, double collisionY, double collisionZ,
             double scale, double seatX, double seatY, double seatZ,
             double offsetX, double offsetY, double offsetZ, double offsetRotation, double speed, double reverse,
             double acceleration, double braking, double drag, double turnRate, double stepHeight,
@@ -29,6 +32,8 @@ public final class VehicleDefinition {
             double wheelbase,double trackWidth,double maxPitch,double maxRoll,double tiltSmoothing) {
         this.id=id; this.model=model; this.drop=drop; this.type=type; this.publicAccess=publicAccess;
         this.width=width; this.height=height; this.hitboxX=hitboxX; this.hitboxY=hitboxY; this.hitboxZ=hitboxZ;
+        this.collisionWidth=collisionWidth;this.collisionHeight=collisionHeight;
+        this.collisionX=collisionX;this.collisionY=collisionY;this.collisionZ=collisionZ;
         this.scale=scale; this.seatX=seatX; this.seatY=seatY; this.seatZ=seatZ;
         this.offsetX=offsetX; this.offsetY=offsetY; this.offsetZ=offsetZ; this.offsetRotation=offsetRotation;
         this.speed=speed; this.reverse=reverse; this.acceleration=acceleration; this.braking=braking;
@@ -41,7 +46,7 @@ public final class VehicleDefinition {
         Object raw = item.properties().get("vehicle");
         if (raw == null) return Optional.empty();
         Map<?,?> m = map(item,raw,"vehicle");
-        keys(item,m,"vehicle","type","public","model_item","drop","hitbox","scale","offset","seat","physics","suspension","view_distance");
+        keys(item,m,"vehicle","type","public","model_item","drop","hitbox","collision","scale","offset","seat","physics","suspension","view_distance");
         Type type;
         try { type=Type.valueOf(String.valueOf(m.containsKey("type")?m.get("type"):"LAND").toUpperCase(java.util.Locale.ROOT)); }
         catch (IllegalArgumentException ex) { throw bad(item,"unknown vehicle type"); }
@@ -49,6 +54,10 @@ public final class VehicleDefinition {
         keys(item,h,"hitbox","width","height","offset");
         Map<?,?> o=map(item,h.get("offset"),"hitbox.offset");
         keys(item,o,"hitbox.offset","x","y","z");
+        Map<?,?> collision=map(item,m.get("collision"),"collision");
+        keys(item,collision,"collision","width","height","offset");
+        Map<?,?> collisionOffset=map(item,collision.get("offset"),"collision.offset");
+        keys(item,collisionOffset,"collision.offset","x","y","z");
         Map<?,?> global=map(item,m.get("offset"),"offset");
         keys(item,global,"offset","x","y","z","rotation");
         Map<?,?> seat=map(item,m.get("seat"),"seat");
@@ -62,6 +71,11 @@ public final class VehicleDefinition {
                 type,Boolean.TRUE.equals(m.get("public")),num(item,h,"width",1.4,0.1,16),
                 num(item,h,"height",1.5,0.1,16),num(item,o,"x",0,-16,16),
                 num(item,o,"y",0,-16,16),num(item,o,"z",0,-16,16),
+                num(item,collision,"width",1.0,0.1,16),
+                num(item,collision,"height",1.5,0.1,16),
+                num(item,collisionOffset,"x",0,-16,16),
+                num(item,collisionOffset,"y",0,-16,16),
+                num(item,collisionOffset,"z",0,-16,16),
                 num(item,m,"scale",1,0.01,16),num(item,seat,"x",0,-16,16),
                 num(item,seat,"y",-0.7,-16,16),num(item,seat,"z",0,-16,16),
                 num(item,global,"x",0,-16,16),num(item,global,"y",0,-16,16),
