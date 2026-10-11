@@ -23,6 +23,15 @@ final class VehicleSuspension {
             VehicleTerrain.Space space,boolean immediate){
         double smoothing=immediate?1.0:definition.tiltSmoothing;
         if(definition.type!=VehicleDefinition.Type.LAND)return level(vehicle,smoothing);
+        if(!immediate&&!vehicle.motion.grounded){
+            // All four wheels have left the ground. Use the relationship
+            // between horizontal momentum and downward velocity instead of
+            // sampling terrain several blocks below the falling vehicle.
+            double target=VehiclePhysics.airbornePitch(vehicle.motion.speed,
+                    vehicle.motion.verticalSpeed,definition.maxPitch,
+                    definition.airbornePitchFactor);
+            return smooth(vehicle,target,0,smoothing);
+        }
         Location base=VehicleTransform.collisionBase(vehicle.location,definition);
         double angle=Math.toRadians(base.getYaw());
         double forwardX=-Math.sin(angle), forwardZ=Math.cos(angle);
