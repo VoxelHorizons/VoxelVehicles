@@ -16,3 +16,34 @@ render:
 # 600 ticks = 30 seconds. Minimum is 100 ticks (5 seconds).
 maintenance:
   cleanup-ticks: 600
+
+# Chest GUI: title glyphs are resolved by VoxelCore at open time.
+# These are defaults only: change them to any authored VoxelCore font aliases.
+inventory:
+  rows: 3
+  titles:
+    without-storage: "&f:offset_-8::vehicle_inventory:"
+    with-storage: "&f:offset_-8::vehicle_inventory_storage:"
+
+  # The preview is a standard VoxelCore-rendered item. To fill the dark 3x3
+  # region, give the selected item model an enlarged display.gui transform.
+  preview-slot: 11
+
+  # GUI slots in screenshot order (0-based). Storage exists ONLY when that
+  # vehicle has inventory.storage_size > 0 in its VoxelCore definition.
+  storage-slots:
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 13
+    - 14
+    - 15
+    - 16
+    - 17
+    - 22
+    - 23
+    - 24
+    - 25
+    - 26
