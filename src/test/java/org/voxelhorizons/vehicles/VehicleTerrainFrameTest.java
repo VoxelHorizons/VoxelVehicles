@@ -95,6 +95,24 @@ public class VehicleTerrainFrameTest {
         assertEquals(1,b.shapeLookups.get());
     }
 
+    @Test public void allocationFreeContactsMatchCollisionState(){
+        FakeWorld world=new FakeWorld();
+        world.material=Material.STONE;
+        VehicleTerrain.Space space=new VehicleTerrain.Frame().space(world.world);
+        assertEquals(1,space.contact(0.1,64.1,0.1,0.9,64.9,0.9));
+        assertEquals(0,space.contact(0.1,65.1,0.1,0.9,65.9,0.9));
+        java.util.List<VehicleTerrain.Box> overlap=new java.util.ArrayList<VehicleTerrain.Box>();
+        assertTrue(space.collisions(0.1,64.1,0.1,0.9,64.9,0.9,overlap));
+        assertFalse(overlap.isEmpty());
+    }
+
+    @Test public void incompleteChunkCoverageNeverPermitsMovement(){
+        FakeWorld world=new FakeWorld();
+        world.loaded=false;
+        VehicleTerrain.Space space=new VehicleTerrain.Frame().space(world.world);
+        assertEquals(-1,space.contact(0,64,0,17,65,1));
+    }
+
     @Test public void negativeAndLargeCoordinatesNeverAlias(){
         FakeWorld world=new FakeWorld();
         VehicleTerrain.Space space=new VehicleTerrain.Frame().space(world.world);
