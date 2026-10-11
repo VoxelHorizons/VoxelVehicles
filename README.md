@@ -652,6 +652,17 @@ render root, with position deduplication and no artificial frame skips.
 Vehicles with no particles and unloaded entities are excluded from the
 particle-emission hot list. Optional particle effect timing is unchanged.
 
+Placed vehicles are also indexed by **world and origin chunk**. Loading or
+unloading a chunk only visits vehicles in that chunk (instead of every
+vehicle ever placed). Interaction ray targeting checks neighboring chunk
+buckets, preserving the normal reach check. The index follows the vehicle
+across chunk boundaries and is removed on pickup.
+
+The periodic maintenance task repairs **missing** ItemDisplays but no
+longer needlessly refreshes every healthy parked or mounted display on each
+maintenance interval. Explicit `/vv sync` and VoxelCore content revision
+changes still reapply all authored models, tint and rendering settings.
+
 ### Observability
 
 An admin can run:
