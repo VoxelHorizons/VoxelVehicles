@@ -133,7 +133,7 @@ final class VehicleTerrain {
             if(needed>rise)rise=needed;
         }
         return candidateBottom+rise<=originalBottom+Math.min(1.0,maximumStep)+EPS
-                ?Math.max(0,rise+EPS):Double.NaN;
+                ?Math.max(0,rise):Double.NaN;
     }
 
     /** Degrees for the model only. Entity hitbox and passenger yaw stay upright. */
