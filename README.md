@@ -532,3 +532,112 @@ The default driving shortcut remains F (swap hands), or `/vv inventory`.
 The E inventory key is client-handled for ItemDisplay mounts, so a Paper
 listener cannot replace it with a server menu; a different client-visible
 mount type or client mod is needed for native E integration.
+
+
+## Optional donkey-style vehicle chest upgrades (PR #11)
+
+**Only explicitly opted-in vehicles** can accept a chest. Existing vehicles
+without `inventory.chest.enabled: true` retain their current always-available
+storage behavior and their existing YAML does not change.
+
+To give the tractor an installable chest on the rear, add this inside
+`items.tractor.properties.vehicle.inventory` along with the existing preview,
+title, filler, and storage slot settings:
+
+```yaml
+inventory:
+  enabled: true
+  storage_enabled: true
+  rows: 3
+  preview-slot: 10
+  preview_item: voxel:tractor_icon
+  fill-item: "voxel:ui/blank"
+  fill-copy-preview-meta: true
+  title: "&f:offset_-8::vehicle_inventory:&rTractor"
+  storage_title: "&f:offset_-8::vehicle_inventory_storage:&rTractor"
+  storage-slots: [3, 4, 5, 6, 7, 8, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25, 26]
+
+  chest:
+    enabled: true
+    item: CHEST             # Configurable vanilla Minecraft material
+    slot: 0                 # Button in vehicle GUI, NOT a cargo slot
+    visual:
+      mode: ITEM_DISPLAY    # NONE | ITEM_DISPLAY | MODEL_SWAP
+      # item: voxel:tractor_chest   # Optional custom VoxelCore model item
+      offset: {x: 0.0, y: 1.0, z: -1.5}
+      scale: 0.8
+      yaw: 0.0
+      follow_tilt: true
+      interaction: true
+      interaction_width: 0.8
+      interaction_height: 0.8
+```
+
+**Coordinates are illustrative.** The chest visual offset is in blocks
+relative to the authored vehicle model origin, not multiplied by the tractor
+`scale`. +Z is forward; -Z is behind the vehicle. Adjust `x/y/z`
+to position the chest over the rear of your actual Blockbench tractor.
+`scale` sizes only the chest item display, not the tractor or the
+player seat. `follow_tilt` carries it with cosmetic suspension.
+
+### Installation, interaction, and removal
+
+- Right-click an opted-in vehicle with a `CHEST` item in your main hand to
+  install one. Exactly one is consumed; its original item metadata is
+  persisted and returned on removal, including across restarts.
+- Or open the vehicle GUI by shift-right-clicking its main body or using
+  `/vv inventory`. Put a chest on your cursor and click the configurable
+  chest button (`slot: 0`) to install. Without a chest installed the normal
+  non-storage overlay/preview is shown and cargo slots are locked/filled.
+- When installed, the **storage overlay** is used and existing cargo slots
+  open. The optional attached chest appears and moves/rotates with the
+  vehicle. Clicking its separate Interaction hitbox opens the inventory.
+- Click the chest button with the cursor empty, or **sneak-right-click the
+  attached chest itself** to detach it. Only the owner or an admin may make
+  changes. The **entire cargo must be empty** before removal; no items can
+  be silently deleted. If the player inventory is full, the returned chest
+  item is dropped at the player.
+- A vehicle cannot be picked up while it contains items **or** an installed
+  chest. The chest must be removed first. Existing parked vehicle interactions,
+  driver controls and rendering remain intact.
+
+An attached chest is persistent until removed; it is **not** merely shown
+while the GUI is open. This allows the vehicle's storage state to be
+identifiable in the world. A chest installed in the inventory immediately
+appears outside once the screen closes.
+
+### Alternative visual approaches
+
+To use the **vehicle's existing model with a different variant** while
+the chest is installed, configure:
+
+```yaml
+chest:
+  enabled: true
+  item: CHEST
+  slot: 0
+  visual:
+    mode: MODEL_SWAP
+    model_item: voxel:tractor_with_chest
+```
+
+Here `voxel:tractor_with_chest` must be an authored **VoxelCore item ID**,
+not a bare resource-pack JSON model path. It replaces the rendered tractor
+item while attached and restores the original model when removed. If the
+alternative item is dyeable, the tractor's placed color is preserved.
+
+Use `visual.mode: NONE` if installing a chest should enable storage without
+adding a visual or replacing the tractor model. For
+`visual.mode: ITEM_DISPLAY`, omit `visual.item` for vanilla `CHEST`
+rendering or set a VoxelCore item ID for a custom designed chest.
+`visual.interaction: false` disables the extra chest hitbox while still
+showing the chest model.
+
+Optional button and visual changes are configured per vehicle and inherited
+by VoxelCore child items such as `tractor-yellow`.
+
+**Scope:** Chest upgrades do not add a new physics collision box, inventory
+capacity is still driven by `inventory.rows` and `storage-slots`, and the
+riding E-key client limitation remains (F or `/vv inventory` works).
+The current UI upgrade slot is a vanilla item button inside the custom chest
+screen; it is not a chest equipment slot implemented through horse packets.
