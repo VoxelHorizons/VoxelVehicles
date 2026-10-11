@@ -58,5 +58,11 @@ public class VehicleOffsetTest {
         assertEquals(4,d.height,0.000001);
         assertEquals(1,d.collisionWidth,0.000001);
         assertEquals(1.5,d.collisionHeight,0.000001);
+        VehicleCollision.Body body=new VehicleCollision.Body(
+                new Location(null,30,64,20,0,0),d);
+        assertEquals(29.5,body.x0,0.000001);
+        assertEquals(30.5,body.x1,0.000001);
+        assertEquals(64,body.y0,0.000001);
+        assertEquals(65.5,body.y1,0.000001);
     }
 }
