@@ -658,10 +658,18 @@ vehicle ever placed). Interaction ray targeting checks neighboring chunk
 buckets, preserving the normal reach check. The index follows the vehicle
 across chunk boundaries and is removed on pickup.
 
-The periodic maintenance task repairs **missing** ItemDisplays but no
-longer needlessly refreshes every healthy parked or mounted display on each
-maintenance interval. Explicit `/vv sync` and VoxelCore content revision
-changes still reapply all authored models, tint and rendering settings.
+The periodic maintenance task repairs **missing** ItemDisplays and chest
+accessories, but no longer needlessly refreshes every healthy parked or
+mounted display on each maintenance interval. Explicit `/vv sync` and
+VoxelCore content revision changes still reapply all authored models, tint
+and rendering settings.
+
+The periodic orphan-entity sweep now inspects a bounded number of loaded
+chunks per server tick (default `maintenance.cleanup-chunks-per-tick: 16`,
+configurable from 1 to 256). Large numbers of player-loaded chunks are no
+longer scanned all at once during the maintenance callback. Partial sweeps
+are carried forward instead of restarted. `/vv cleanup` still performs
+the explicit full sweep when an admin requests it.
 
 ### Observability
 
