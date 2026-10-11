@@ -77,6 +77,37 @@ Older than 1.19.4: this build disables itself when display entities are absent. 
 4. Convert HavenVehicles vehicle definitions, variants and trailers, then test migration against copied worlds and a performance benchmark.
 
 
+## Dyeable vehicles
+
+On Minecraft 1.21.4+, vehicle items can use the same color setup as VoxelFurniture's curtains.
+
+Add to the VoxelCore tractor item:
+
+```yaml
+render:
+  model: voxel:item/vehicles/tractor_overhead
+  custom_model_data:
+    color: '#FFFFFF'
+  rule:
+    model:
+      id: voxel:item/vehicles/tractor_overhead
+      tint: color
+properties:
+  dyeable:
+    key: color
+    color: '#FFFFFF'
+  vehicle:
+    type: LAND
+    model_item: voxel:tractor
+    drop: voxel:tractor
+```
+
+Keep your existing physics, seats, hitbox and access settings below the vehicle mapping.
+Add `"tintindex": 0` only to the paintable faces of the tractor model, not the seat or tires.
+The selected RGB color now travels with the placed vehicle, survives restart and is restored on pickup.
+For a separate model_item definition, make that definition dyeable too.
+
+
 ## Vehicle offsets, rendering, pickup and cleanup
 
 The `properties.vehicle` mapping now supports a **global local-space offset**.
