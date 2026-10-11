@@ -53,7 +53,11 @@ public final class VehicleManager {
         int cleanupTicks=Math.max(100,plugin.getConfig().getInt("maintenance.cleanup-ticks",600));
         plugin.getServer().getScheduler().runTaskTimer(plugin,new Runnable(){
             @Override public void run(){
-                synchronizeLoaded();
+                // Maintenance only repairs missing entities. Do NOT rebuild
+                // every healthy mounted ItemDisplay or recreate all item
+                // models every 30 seconds. Explicit /vv sync and VoxelCore
+                // content revision changes still request a full refresh.
+                repairLoaded();
                 cleanupLoadedOrphans();
             }
         },cleanupTicks,cleanupTicks);
@@ -81,8 +85,13 @@ public final class VehicleManager {
         synchronizeLoaded();
     }
 
-    /** Reconciles all currently rendered vehicles with the latest VoxelCore models. */
-    public void synchronizeLoaded(){
+    /** Explicit sync/content reload: reapply models and refresh all rendered vehicles. */
+    public void synchronizeLoaded(){reconcileLoaded(true);}
+
+    /** Periodic maintenance: repair only missing renderers, never refresh healthy mounts. */
+    private void repairLoaded(){reconcileLoaded(false);}
+
+    private void reconcileLoaded(boolean fullRefresh){
         for(VehicleInstance v:instances.values()){
             VehicleDefinition d=definitions.get(v.type);
             if(d==null){
@@ -98,7 +107,7 @@ public final class VehicleManager {
                 try{activate(v,d);}catch(RuntimeException e){
                     plugin.getLogger().warning("Could not repair "+v.id+": "+e.getMessage());
                 }
-            }else{
+            }else if(fullRefresh){
                 try{
                     VehicleSuspension.initialize(v,d);
                     deindex(v);
