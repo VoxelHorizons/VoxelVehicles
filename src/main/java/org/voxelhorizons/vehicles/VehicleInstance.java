@@ -14,7 +14,7 @@ public final class VehicleInstance {
     public final Integer dyeColor;
     public final VehiclePhysics.State motion;
     public Location location;
-    public Entity display,hitbox,seat;
+    public Entity display,hitbox,seat,chestDisplay,chestHitbox;
     public UUID driver;
     /** True when the rider (or compatibility seat) rides the ItemDisplay root. */
     public boolean linkedSeat;
@@ -23,6 +23,9 @@ public final class VehicleInstance {
     public VehiclePhysics.Input input=VehiclePhysics.Input.NEUTRAL;
     /** Logical per-vehicle cargo, saved independently from display entities. */
     final ItemStack[] storage=new ItemStack[54];
+    /** The original upgrade ItemStack is returned when the chest is detached. */
+    ItemStack installedChest;
+    boolean chestInstalled(){return installedChest!=null&&installedChest.getAmount()>0;}
 
     boolean hasStoredItems(){
         for(ItemStack stack:storage)if(stack!=null&&stack.getAmount()>0)return true;
