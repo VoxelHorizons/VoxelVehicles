@@ -60,6 +60,61 @@ public class VehicleInventoryDefinitionTest {
         parse(data);
     }
 
+    @Test public void tractorItemAcceptsPreviewSlotAndInvisibleFillItem(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("enabled",true);
+        data.put("storage_enabled",true);
+        data.put("rows",3);
+        data.put("preview-slot",10);
+        data.put("fill-item","voxel:ui/blank");
+        data.put("preview_item","voxel:tractor_icon");
+        data.put("storage_title","&f:offset_-8::vehicle_inventory_storage:");
+        VehicleInventoryDefinition tractor=parse(data);
+        // VoxelCore extends already resolves inherited properties before
+        // passing them to the vehicle parser.
+        VehicleInventoryDefinition yellow=VehicleInventoryDefinition.parse(
+                ContentID.of("voxel","tractor-yellow"),data);
+        assertEquals(Integer.valueOf(10),tractor.previewSlot);
+        assertEquals("voxel:ui/blank",tractor.fillItem);
+        assertEquals(3,tractor.effectiveStorageRows());
+        assertEquals(tractor.previewSlot,yellow.previewSlot);
+        assertEquals(tractor.fillItem,yellow.fillItem);
+        assertEquals("voxel:tractor_icon",yellow.previewItem.toString());
+    }
+
+    @Test public void unsetOptionsInheritGlobalDefaults(){
+        VehicleInventoryDefinition spec=parse(Collections.<String,Object>emptyMap());
+        assertNull(spec.previewSlot);
+        assertNull(spec.fillItem);
+    }
+
+    @Test public void blankFillItemCanDisableGlobalFiller(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("fill-item","");
+        assertEquals("",parse(data).fillItem);
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void rejectPreviewOutsideInventoryBounds(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("preview-slot",54);
+        parse(data);
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void rejectNonIntegerPreviewSlot(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("preview-slot",10.5);
+        parse(data);
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void rejectNonTextFiller(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("fill-item",true);
+        parse(data);
+    }
+
     @Test public void allSixRowsSupported(){
         Map<String,Object> data=new HashMap<String,Object>();
         data.put("rows",6);
