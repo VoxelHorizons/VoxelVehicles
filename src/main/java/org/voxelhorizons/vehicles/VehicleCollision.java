@@ -71,14 +71,72 @@ final class VehicleCollision {
         return "Vehicle placement was rejected; try clear, loaded terrain.";
     }
 
+    /** A support contact is a collision surface less than 0.06 blocks below us. */
+    static boolean supported(Location where,VehicleDefinition d,VehicleTerrain.Space space){
+        Location probe=where.clone().add(0,-0.06,0);
+        return !clear(probe,d,space);
+    }
+
+    static final class FallResult {
+        final Location location;
+        final boolean landed;
+        FallResult(Location location,boolean landed){
+            this.location=location;this.landed=landed;
+        }
+    }
+
+    /**
+     * Resolve a continuous fall in bounded substeps and land exactly on a
+     * VoxelShape top surface. Previous fixed -0.12 movement stopped up to
+     * 0.12 blocks above the ground and created hovering/hover oscillations.
+     */
+    static FallResult descend(Location from,VehicleDefinition d,double down,
+            double maxSubstep,VehicleTerrain.Space space){
+        if(down>=0)return new FallResult(from.clone(),false);
+        int count=(int)Math.max(1,Math.ceil(-down/Math.max(0.05,maxSubstep)));
+        double delta=down/count;
+        Location current=from.clone();
+        for(int i=0;i<count;i++){
+            Location candidate=current.clone().add(0,delta,0);
+            Body previous=new Body(current,d);
+            Body next=new Body(candidate,d);
+            if(!boundsValid(candidate.getWorld(),next))
+                return new FallResult(current,true);
+            List<VehicleTerrain.Box> collisions=new ArrayList<VehicleTerrain.Box>();
+            if(!space.collisions(next.x0,next.y0,next.z0,
+                    next.x1,next.y1,next.z1,collisions))
+                return new FallResult(current,false); // unloaded chunk: never force-load
+            if(collisions.isEmpty()){current=candidate;continue;}
+            double top=Double.NEGATIVE_INFINITY;
+            for(VehicleTerrain.Box box:collisions){
+                // Only a surface crossed by our downward-moving bottom is a
+                // landing platform; never snap up to a ceiling or two-block wall.
+                if(box.maxY<=previous.y0+VehicleTerrain.EPS)
+                    top=Math.max(top,box.maxY);
+            }
+            if(Double.isFinite(top)){
+                Location contact=current.clone();
+                contact.setY(top-d.collisionY);
+                if(clear(contact,d,space))current=contact;
+            }
+            return new FallResult(current,true);
+        }
+        return new FallResult(current,false);
+    }
+
     static Location step(VehicleInstance v,VehicleDefinition d,double dx,double dy,double dz,
             double maxSubstep){
         return step(v,d,dx,dy,dz,maxSubstep,
-                new VehicleTerrain.Space(v.location.getWorld()));
+                new VehicleTerrain.Space(v.location.getWorld()),true);
     }
 
     static Location step(VehicleInstance v,VehicleDefinition d,double dx,double dy,double dz,
             double maxSubstep,VehicleTerrain.Space space){
+        return step(v,d,dx,dy,dz,maxSubstep,space,true);
+    }
+
+    static Location step(VehicleInstance v,VehicleDefinition d,double dx,double dy,double dz,
+            double maxSubstep,VehicleTerrain.Space space,boolean allowStepping){
         Location pos=v.location.clone();
         pos.setYaw(v.motion.yaw);
         int n=(int)Math.max(1,Math.ceil(Math.max(Math.abs(dx),
@@ -87,7 +145,7 @@ final class VehicleCollision {
         for(int i=0;i<n;i++){
             Location next=pos.clone().add(sx,sy,sz);
             if(clear(next,d,space)){pos=next;continue;}
-            if(d.type==VehicleDefinition.Type.LAND&&d.stepHeight>0) {
+            if(allowStepping&&d.type==VehicleDefinition.Type.LAND&&d.stepHeight>0) {
                 Location raised=stepUp(pos,next,d,space);
                 if(raised!=null){pos=raised;continue;}
             }
