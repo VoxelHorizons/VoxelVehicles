@@ -219,3 +219,44 @@ Test on Paper 26.2:
 2. Mount and dismount without movement: the tractor model must not jump or float.
 3. Drive through a slab, stairs, a single step and toward a two-block wall.
 4. Reload VoxelCore while the vehicle is parked, then mounted, and confirm offsets remain stable.
+
+
+## Driving off cliffs: airborne gravity and nose/rear pitch
+
+Land vehicles now use an accumulated **vertical velocity** rather than the old
+fixed 0.12-block downward probe. After driving off a cliff, the tractor keeps
+its horizontal momentum, accelerates downward under gravity, reaches a terminal
+fall speed, and lands on the top of actual block collision shapes without
+permanently hovering a fractional block above the ground.
+
+The visual suspension switches smoothly to **airborne pitch**: driving forwards
+off a ledge dips the nose; reversing off a ledge tilts the rear down. A
+straight vertical drop has no artificially imposed forward/backward lean.
+Landing returns to the existing four-wheel terrain tilt. The camera/seat,
+physical collision body, resource-pack model and clickbox retain their
+previous alignment; only the visual model matrix tilts.
+
+Optional tuning keys under the existing `properties.vehicle`:
+
+```yaml
+physics:
+  gravity: 0.08           # Downward acceleration in blocks/tick²
+  terminal_velocity: 1.6 # Maximum fall speed in blocks/tick
+  air_drag: 0.99          # Preserves horizontal momentum each airborne tick
+
+suspension:
+  airborne_pitch_factor: 0.8 # 0 disables in-air nose/rear tilt; 2 is strongest
+```
+
+These values are defaults; existing vehicle content files continue to load
+without defining them. `suspension.max_pitch` also limits airborne pitch,
+and `suspension.smoothing` controls how quickly it blends with terrain tilt.
+Airborne land vehicles cannot steer or accelerate in mid-air: steering resumes
+on contact with the ground. There is **no fall-damage or vehicle durability
+system** in this version. The active driving tick still handles physics while
+the vehicle has a driver; passive falling for unmanned vehicles is a separate
+future improvement.
+
+Validation: test forward and reverse departures, drops onto full blocks and
+slabs, ledges bordering unloaded chunks, and landing immediately after driving
+over a one-block obstacle on Paper 26.2.
