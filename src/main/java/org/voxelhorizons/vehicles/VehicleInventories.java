@@ -2,6 +2,7 @@ package org.voxelhorizons.vehicles;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -31,8 +32,10 @@ final class VehicleInventories implements Listener {
         final Player player;
         final Inventory top;
         final List<Integer> cargoSlots;
-        Session(VehicleInstance vehicle,Player player,Inventory top,List<Integer> slots){
+        final int chestSlot;
+        Session(VehicleInstance vehicle,Player player,Inventory top,List<Integer> slots,int chestSlot){
             this.vehicle=vehicle;this.player=player;this.top=top;this.cargoSlots=slots;
+            this.chestSlot=chestSlot;
         }
     }
 
@@ -73,7 +76,7 @@ final class VehicleInventories implements Listener {
         // A vehicle selects storage rows (0=no storage); the configured GUI
         // has a minimum height to preserve the authored model preview panel.
         int minimumRows=plugin.getConfig().getInt("inventory.rows",3);
-        int storageRows=definition.inventory.effectiveStorageRows();
+        int storageRows=definition.inventory.effectiveStorageRows(vehicle);
         int rows=Math.max(minimumRows,storageRows);
         int size=rows*9;
         int preview=definition.inventory.previewSlot!=null
@@ -94,6 +97,11 @@ final class VehicleInventories implements Listener {
         }
         if(storageRows>0&&cargo.isEmpty()){
             player.sendMessage("§cVehicle storage rows have no assigned slots.");
+            return false;
+        }
+        int chestSlot=definition.inventory.chest.enabled?definition.inventory.chest.slot:-1;
+        if(chestSlot>=0&&(chestSlot>=size||chestSlot==preview||cargo.contains(chestSlot))){
+            player.sendMessage("§cVehicle chest slot conflicts with the preview or storage layout.");
             return false;
         }
         String raw=storageRows==0
@@ -132,7 +140,9 @@ final class VehicleInventories implements Listener {
                         ?definition.inventory.copyFillPreviewMeta.booleanValue()
                         :plugin.getConfig().getBoolean("inventory.fill-copy-preview-meta",true);
                 if(copyMeta)fill=copyPreviewText(fill,previewItem);
-                for(int slot:decorativeSlots(size,preview,cargo))
+                List<Integer> protectedSlots=new ArrayList<Integer>(cargo);
+                if(chestSlot>=0)protectedSlots.add(chestSlot);
+                for(int slot:decorativeSlots(size,preview,protectedSlots))
                     inv.setItem(slot,fill.clone());
             }
         }catch(RuntimeException error){
@@ -140,9 +150,72 @@ final class VehicleInventories implements Listener {
             player.sendMessage("§cInvalid vehicle inventory.fill-item: "+error.getMessage());
             return false;
         }
-        open.put(vehicle.id,new Session(vehicle,player,inv,cargo));
+        if(chestSlot>=0)inv.setItem(chestSlot,chestButton(vehicle,definition.inventory.chest));
+        open.put(vehicle.id,new Session(vehicle,player,inv,cargo,chestSlot));
         player.openInventory(inv);
         return true;
+    }
+
+    static ItemStack chestButton(VehicleInstance vehicle,VehicleChestDefinition chest){
+        ItemStack button=new ItemStack(chest.item,1);
+        ItemMeta meta=button.getItemMeta();
+        if(meta!=null){
+            meta.setDisplayName(vehicle.chestInstalled()
+                    ?"§6Storage Chest §a(Installed)":"§6Add Storage Chest");
+            meta.setLore(vehicle.chestInstalled()
+                    ?Arrays.asList("§7Storage is installed",
+                            "§fClick to detach when empty")
+                    :Arrays.asList("§7Storage is not installed",
+                            "§fClick here holding a chest to install"));
+            button.setItemMeta(meta);
+        }
+        return button;
+    }
+
+    /** True only for vehicles that opted in to an attachable chest. */
+    private void chestAction(Session session,InventoryClickEvent event){
+        event.setCancelled(true);
+        VehicleInstance vehicle=session.vehicle;
+        Player player=session.player;
+        VehicleDefinition definition=manager.definition(vehicle.type).orElse(null);
+        if(definition==null||!definition.inventory.chest.enabled)return;
+        VehicleChestDefinition chest=definition.inventory.chest;
+        if(vehicle.chestInstalled()){
+            if(vehicle.hasStoredItems()){
+                player.sendMessage("§cEmpty the vehicle storage before removing its chest.");
+                return;
+            }
+            plugin.getServer().getScheduler().runTask(plugin,()->{
+                if(!player.isOnline())return;
+                ItemStack removed=manager.detachChest(vehicle);
+                if(removed==null){player.sendMessage("§cCannot detach the chest while it contains items.");return;}
+                Map<Integer,ItemStack> overflow=player.getInventory().addItem(removed);
+                for(ItemStack excess:overflow.values())player.getWorld().dropItemNaturally(
+                        player.getLocation(),excess);
+                plugin.getServer().getScheduler().runTask(plugin,()->{
+                    if(player.isOnline())open(player,vehicle);
+                });
+            });
+        }else{
+            ItemStack cursor=event.getCursor();
+            if(cursor==null||cursor.getType()!=chest.item||cursor.getAmount()<=0){
+                player.sendMessage("§7Place a "+chest.item+" on your cursor and click the chest slot.");
+                return;
+            }
+            plugin.getServer().getScheduler().runTask(plugin,()->{
+                if(!player.isOnline())return;
+                ItemStack current=player.getItemOnCursor();
+                if(current==null||current.getType()!=chest.item||current.getAmount()<=0)return;
+                if(manager.installChest(vehicle,current)){
+                    ItemStack rest=current.clone();
+                    rest.setAmount(current.getAmount()-1);
+                    player.setItemOnCursor(rest.getAmount()>0?rest:null);
+                    plugin.getServer().getScheduler().runTask(plugin,()->{
+                        if(player.isOnline())open(player,vehicle);
+                    });
+                }else player.sendMessage("§cCould not install the chest on this vehicle.");
+            });
+        }
     }
 
     /**
@@ -299,6 +372,10 @@ final class VehicleInventories implements Listener {
         Session session=find(event.getView().getTopInventory());
         if(session==null)return;
         int raw=event.getRawSlot();
+        if(raw==session.chestSlot&&raw>=0){
+            chestAction(session,event);
+            return;
+        }
         // Double-click collection searches the entire open inventory,
         // including the locked preview item, even when a cargo slot is clicked.
         if(event.getAction()==InventoryAction.COLLECT_TO_CURSOR){
