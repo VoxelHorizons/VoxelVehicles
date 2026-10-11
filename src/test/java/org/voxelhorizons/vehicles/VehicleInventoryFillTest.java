@@ -3,6 +3,7 @@ package org.voxelhorizons.vehicles;
 import org.bukkit.Material;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.junit.Test;
 import org.voxelhorizons.content.ContentID;
 import org.voxelhorizons.content.item.ItemDefinition;
@@ -55,6 +56,59 @@ public class VehicleInventoryFillTest {
     public void unknownFillModelIsRejectedClearly(){
         VehicleInventories.findFillItem(Collections.<ContentID,ItemDefinition>emptyMap(),
                 "voxel:missing_blank");
+    }
+
+    @Test public void sixColumnStorageDoesNotFillSlots3_12Or23(){
+        List<Integer> slots=Arrays.asList(3,4,5,6,7,8,12,13,14,15,16,17,
+                21,22,23,24,25,26);
+        List<Integer> active=VehicleInventories.storageSlots(slots,3,10,27);
+        List<Integer> filler=VehicleInventories.decorativeSlots(27,10,active);
+        assertEquals(18,active.size());
+        for(int slot:new int[]{3,12,23}) {
+            assertTrue(active.contains(slot));
+            assertFalse(filler.contains(slot));
+        }
+        assertEquals(8,filler.size());
+    }
+
+    @Test public void previewTitleAndLoreCopyToFillerWithoutReplacingModel(){
+        ItemMeta source=metadata("§6Tractor",Arrays.asList("§7Engine", "§fStorage"));
+        ItemMeta target=metadata("Invisible",Arrays.asList("Should be removed"));
+        VehicleInventories.copyPreviewHover(target,source);
+        assertEquals("§6Tractor",target.getDisplayName());
+        assertEquals(Arrays.asList("§7Engine","§fStorage"),target.getLore());
+        // A subsequent change to the source lore must not mutate the copy.
+        source.setLore(Collections.singletonList("Different"));
+        assertEquals(Arrays.asList("§7Engine","§fStorage"),target.getLore());
+    }
+
+    @Test public void previewWithoutLoreClearsFillerLore(){
+        ItemMeta source=metadata(null,null);
+        ItemMeta target=metadata("Other",Collections.singletonList("Other lore"));
+        VehicleInventories.copyPreviewHover(target,source);
+        assertFalse(target.hasDisplayName());
+        assertFalse(target.hasLore());
+    }
+
+    private static ItemMeta metadata(String name,List<String> lore){
+        final Map<String,Object> values=new HashMap<String,Object>();
+        values.put("name",name);
+        values.put("lore",lore==null?null:new ArrayList<String>(lore));
+        return (ItemMeta)Proxy.newProxyInstance(
+                ItemMeta.class.getClassLoader(),new Class<?>[]{ItemMeta.class},
+                (proxy,method,args)->{
+                    switch(method.getName()){
+                        case "hasDisplayName":return values.get("name")!=null;
+                        case "getDisplayName":return values.get("name");
+                        case "setDisplayName":values.put("name",args[0]);return null;
+                        case "hasLore":return values.get("lore")!=null;
+                        case "getLore":return values.get("lore")==null?null:
+                                new ArrayList<String>((List<String>)values.get("lore"));
+                        case "setLore":values.put("lore",args[0]==null?null:
+                                new ArrayList<String>((List<String>)args[0]));return null;
+                        default:throw new UnsupportedOperationException(method.getName());
+                    }
+                });
     }
 
     @Test public void shiftClickNeverReplacesPreviewOrFiller(){
