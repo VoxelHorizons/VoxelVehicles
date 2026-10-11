@@ -186,6 +186,9 @@ public final class VehicleManager {
                 v.location=next;
                 dirty=true;
                 renderer.move(v,d);
+                if(v.driver==null){
+                    deindex(v);renderer.unseat(v);index(v);iter.remove();
+                }
             }
         }
         int interval=Math.max(20,plugin.getConfig().getInt("physics.autosave-ticks",200));
