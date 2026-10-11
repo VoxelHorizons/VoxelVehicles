@@ -350,7 +350,8 @@ with `/vc admin content reload` and adjustable without rebuilding the plugin.
 
 The supplied mock-up uses 27 slots. The dark 3x3 preview window is left (columns 2–4),
 the right-hand 15 cargo slots are configurable, and the actual single preview
-item is rendered at slot 11, locked from clicks and drags. All GUI positions
+item is rendered at configurable slot 10 (one column to the left in the
+updated artwork), locked from clicks and drags. All GUI positions
 and title templates are editable in VoxelVehicles `config.yml`.
 
 On each vehicle definition, configure `properties.vehicle.inventory`:
@@ -424,13 +425,44 @@ storage to retrieve items. Nonempty cargo also continues to block vehicle pickup
 
 Vehicle storage is saved in `vehicles.yml` under the stable per-instance
 UUID, using Bukkit ItemStack serialization. The current version supports a
-single viewer per vehicle inventory. Shift-clicking *from* the player's
-inventory into the menu is intentionally blocked to prevent items entering
-locked slots; manual placement into the authorized cargo slots and normal
-extraction work. Double-click collection is also guarded. Pickup/removal of a
+single viewer per vehicle inventory. Shift-clicking between the player inventory and vehicle cargo now
+works by moving items only into **authorized cargo slots**; cosmetic fillers
+and the vehicle preview can never be used as storage. Manual cargo placement
+and extraction continue to work. Double-click collection is also guarded. Pickup/removal of a
 vehicle containing cargo is blocked so players cannot lose contents.
 The menu does not currently migrate cargo into the picked-up vehicle item.
 
 The new system introduces no client mod, fake horse, or server-rendered GUI
 entities. Because the preview uses vanilla item rendering, your resource pack
 must do the GUI scale/translation work.
+
+### Invisible fill item and preview alignment
+
+`plugins/VoxelVehicles/config.yml` supports a global `inventory.fill-item`
+setting to display an invisible VoxelCore item in every locked/decorative
+inventory slot. Set `fill-item: ""` to turn it off. An item ID such as
+`voxel:ui-blank` or its uniquely identifiable model path such as
+`voxel:ui/blank` is accepted; if a model path is ambiguous, specify
+the actual registered item ID instead. Decorative filler stacks are
+cloned, are never persisted as cargo, and cannot be taken by clicks,
+hotbar swaps, double-click collection, drag, or shift-click. The setting
+is optional and the actual model must be an authored and registered
+VoxelCore item, not just an unregistered resource-pack JSON.
+
+The preview item slot uses `inventory.preview-slot`; for the updated
+left-shifted artwork set it to `10` (zero-based, second column, middle
+row), instead of the previous `11`. This is not hardcoded Java logic.
+Shift-click from player inventory now only deposits to configured free
+cargo slots, combining stacks where possible; shift-clicking from
+cargo returns items to the player's inventory. When storage is disabled,
+shift-click does not alter the preview or the fillers.
+
+```yaml
+inventory:
+  rows: 3
+  preview-slot: 10
+  fill-item: "voxel:ui/blank"
+  titles:
+    without-storage: "&f:offset_-8::vehicle_inventory:"
+    with-storage: "&f:offset_-8::vehicle_inventory_storage:"
+```
