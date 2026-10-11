@@ -10,18 +10,17 @@ final class VehicleChestDefinition {
 
     final boolean enabled;
     final Material item;
-    final int slot;
     final VisualMode mode;
     final ContentID visualItem,alternateModel;
     final double x,y,z,scale,yaw;
     final boolean followTilt,interaction;
     final double clickWidth,clickHeight;
 
-    private VehicleChestDefinition(boolean enabled,Material item,int slot,VisualMode mode,
+    private VehicleChestDefinition(boolean enabled,Material item,VisualMode mode,
             ContentID visualItem,ContentID alternateModel,
             double x,double y,double z,double scale,double yaw,boolean followTilt,
             boolean interaction,double clickWidth,double clickHeight){
-        this.enabled=enabled;this.item=item;this.slot=slot;this.mode=mode;
+        this.enabled=enabled;this.item=item;this.mode=mode;
         this.visualItem=visualItem;this.alternateModel=alternateModel;
         this.x=x;this.y=y;this.z=z;this.scale=scale;this.yaw=yaw;
         this.followTilt=followTilt;this.interaction=interaction;
@@ -29,9 +28,11 @@ final class VehicleChestDefinition {
     }
 
     static VehicleChestDefinition parse(ContentID owner,Object raw){
-        if(raw==null)return new VehicleChestDefinition(false,Material.CHEST,0,
+        if(raw==null)return new VehicleChestDefinition(false,Material.CHEST,
                 VisualMode.NONE,null,null,0,0,0,1,0,false,false,0.8,0.8);
         Map<?,?> m=mapping(owner,raw,"chest");
+        // Legacy chest.slot is intentionally ignored: there is no GUI button.
+        // Accept older YAML so existing worlds don't fail plugin startup.
         keys(owner,m,"chest","enabled","item","slot","visual");
         Object enable=m.get("enabled");
         if(enable!=null&&!(enable instanceof Boolean))
@@ -42,7 +43,7 @@ final class VehicleChestDefinition {
         Material material=Material.matchMaterial(materialName.toUpperCase(Locale.ROOT));
         if(material==null||!material.isItem())
             throw bad(owner,"chest.item is not a valid Minecraft item material: "+materialName);
-        int slot=integer(owner,m,"slot",0,0,53);
+        if(m.containsKey("slot"))integer(owner,m,"slot",0,0,53);
         Map<?,?> visual=mapping(owner,m.get("visual"),"chest.visual");
         keys(owner,visual,"chest.visual","mode","item","model_item","offset","scale",
                 "yaw","follow_tilt","interaction","interaction_width","interaction_height");
@@ -58,7 +59,7 @@ final class VehicleChestDefinition {
         keys(owner,offset,"chest.visual.offset","x","y","z");
         boolean tilt=bool(owner,visual,"follow_tilt",true);
         boolean interaction=bool(owner,visual,"interaction",true);
-        return new VehicleChestDefinition(enabled,material,slot,mode,itemId,alternative,
+        return new VehicleChestDefinition(enabled,material,mode,itemId,alternative,
                 number(owner,offset,"x",0,-16,16),
                 number(owner,offset,"y",0,-16,16),
                 number(owner,offset,"z",0,-16,16),
