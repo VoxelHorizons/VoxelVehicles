@@ -33,9 +33,11 @@ final class VehicleRenderer {
             invokeOptional(display,"setViewRange",float.class,definition.viewDistance/64.0f);
             invokeOptional(display,"setTeleportDuration",int.class,interpolation());
             tag(display,vehicle.id);
-            hitbox=at.getWorld().spawnEntity(VehicleTransform.hitbox(vehicle.location,definition),
-                    EntityType.valueOf("INTERACTION"));
+            vehicle.teleports.spawned(display,at);
+            Location hitboxAt=VehicleTransform.hitbox(vehicle.location,definition);
+            hitbox=at.getWorld().spawnEntity(hitboxAt,EntityType.valueOf("INTERACTION"));
             tag(hitbox,vehicle.id);
+            vehicle.teleports.spawned(hitbox,hitboxAt);
             vehicle.display=display;
             vehicle.hitbox=hitbox;
             refresh(vehicle,definition);
@@ -43,6 +45,7 @@ final class VehicleRenderer {
             if(display!=null)display.remove();
             if(hitbox!=null)hitbox.remove();
             chest.remove(vehicle);
+            vehicle.teleports.clear();
             vehicle.display=null;vehicle.hitbox=null;
             throw new IllegalStateException("Could not spawn modern vehicle entities",error);
         }
@@ -93,19 +96,22 @@ final class VehicleRenderer {
     void move(VehicleInstance vehicle,VehicleDefinition definition){
         Location root=VehicleTransform.renderRoot(vehicle.location,definition);
         if(vehicle.display!=null&&vehicle.display.isValid())
-            vehicle.display.teleport(root);
+            vehicle.teleports.ensure(vehicle.display,root,true);
         if(vehicle.seat!=null&&vehicle.seat!=vehicle.display
                 &&vehicle.seat.isValid()&&!vehicle.linkedSeat){
             // Compatibility-only fallback for servers that cannot attach a
-            // seat to an ItemDisplay.
-            if(!vehicle.seat.teleport(root)){
+            // seat to the main ItemDisplay. Never skip an actual seat move.
+            if(!vehicle.teleports.ensure(vehicle.seat,root,true)){
                 plugin.getLogger().warning("Seat teleport failed for "+vehicle.id);
                 vehicle.seat.eject();
                 vehicle.stop();
             }
         }
         if(vehicle.hitbox!=null&&vehicle.hitbox.isValid())
-            vehicle.hitbox.teleport(VehicleTransform.hitbox(vehicle.location,definition));
+            // Interaction hitboxes are axis-aligned: a pure yaw change
+            // cannot affect the hitbox if its world centre is unchanged.
+            vehicle.teleports.ensure(vehicle.hitbox,
+                    VehicleTransform.hitbox(vehicle.location,definition),false);
         chest.move(vehicle,definition);
     }
 
@@ -136,9 +142,11 @@ final class VehicleRenderer {
                     VehicleTransform.renderRoot(v.location,d),EntityType.ARMOR_STAND);
             stand.setVisible(false);stand.setGravity(false);stand.setSmall(true);
             stand.setMarker(true);tag(stand,v.id);
+            v.teleports.spawned(stand,VehicleTransform.renderRoot(v.location,d));
             linked=v.display.addPassenger(stand);
             if(!stand.addPassenger(player)){
                 if(linked)v.display.removePassenger(stand);
+                v.teleports.forget(stand);
                 stand.remove();
                 return false;
             }
@@ -155,6 +163,7 @@ final class VehicleRenderer {
                 if(linked&&v.display!=null&&v.display.isValid())
                     v.display.removePassenger(stand);
                 stand.eject();stand.remove();
+                v.teleports.forget(stand);
             }
             v.seat=null;v.linkedSeat=false;v.stop();
             plugin.getLogger().warning("Unable to mount "+v.id+": "+ex.getMessage());
@@ -170,6 +179,7 @@ final class VehicleRenderer {
                 if(v.linkedSeat&&v.display!=null&&v.display.isValid())
                     v.display.removePassenger(v.seat);
                 v.seat.eject();v.seat.remove();
+                v.teleports.forget(v.seat);
             }
             v.seat=null;
         }
@@ -187,6 +197,7 @@ final class VehicleRenderer {
         chest.remove(v);
         if(v.display!=null){v.display.remove();v.display=null;}
         if(v.hitbox!=null){v.hitbox.remove();v.hitbox=null;}
+        v.teleports.clear();
     }
 
     private int interpolation(){
