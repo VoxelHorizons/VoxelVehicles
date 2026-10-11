@@ -69,11 +69,27 @@ final class VehicleListener implements Listener {
         Player player=event.getPlayer();
         markRightClick(player);
         event.setCancelled(true);
+        VehicleDefinition d=vehicles.definition(v.type).orElse(null);
+        if(d==null)return;
+        if(!d.publicAccess&&!v.owner.equals(player.getUniqueId())
+                &&!player.hasPermission("voxelvehicles.admin")){
+            player.sendMessage("§cYou cannot modify this vehicle.");return;
+        }
+        if(v.chestHitbox!=null&&event.getRightClicked().equals(v.chestHitbox)){
+            if(player.isSneaking()&&v.chestInstalled()){
+                detachChest(v,player);
+            }else openInventory(player,v);
+            return;
+        }
+        // A compatible chest clicked onto the vehicle upgrades its cargo
+        // without placing a chest block or mounting the driver.
+        if(tryInstallChest(v,player))return;
         if(player.isSneaking()){
             openInventory(player,v);
             return;
         }
-        if(!vehicles.mount(v,player))player.sendMessage("§cThis vehicle is already occupied or access is denied.");
+        if(!vehicles.mount(v,player))
+            player.sendMessage("§cThis vehicle is already occupied or access is denied.");
     }
 
     /**
@@ -101,7 +117,43 @@ final class VehicleListener implements Listener {
         if(v==null)return;
         markRightClick(player);
         event.setCancelled(true);
-        openInventory(player,v);
+        if(!tryInstallChest(v,player))openInventory(player,v);
+    }
+
+    private boolean tryInstallChest(VehicleInstance vehicle,Player player){
+        VehicleDefinition d=vehicles.definition(vehicle.type).orElse(null);
+        if(d==null||!d.inventory.chest.enabled||!d.inventory.enabled
+                ||!d.inventory.storageEnabled||d.inventory.rows<1)return false;
+        ItemStack hand=player.getInventory().getItemInMainHand();
+        if(hand==null||hand.getType()!=d.inventory.chest.item)return false;
+        if(vehicle.chestInstalled()){
+            openInventory(player,vehicle);
+            return true;
+        }
+        if(vehicle.driver!=null&& !vehicle.driver.equals(player.getUniqueId()))return true;
+        if(vehicles.installChest(vehicle,hand)){
+            int remaining=hand.getAmount()-1;
+            if(remaining>0)hand.setAmount(remaining);
+            else player.getInventory().setItemInMainHand(null);
+            player.sendMessage("§aStorage chest attached to vehicle.");
+        }else player.sendMessage("§cCannot attach a storage chest to this vehicle.");
+        return true;
+    }
+
+    private void detachChest(VehicleInstance vehicle,Player player){
+        if(!vehicle.owner.equals(player.getUniqueId())
+                &&!player.hasPermission("voxelvehicles.admin")){
+            player.sendMessage("§cOnly the owner can remove this chest.");return;
+        }
+        ItemStack returned=vehicles.detachChest(vehicle);
+        if(returned==null){
+            player.sendMessage("§cEmpty the chest storage before detaching it.");
+            return;
+        }
+        Map<Integer,ItemStack> remaining=player.getInventory().addItem(returned);
+        for(ItemStack excess:remaining.values())
+            player.getWorld().dropItemNaturally(player.getLocation(),excess);
+        player.sendMessage("§aStorage chest removed.");
     }
 
     private void markRightClick(Player player){
@@ -191,7 +243,7 @@ final class VehicleListener implements Listener {
                 &&!player.hasPermission("voxelvehicles.admin"))return;
         VehicleDefinition d=vehicles.definition(v.type).orElse(null);
         if(!vehicles.remove(v)){
-            player.sendMessage("§cEmpty the vehicle storage before picking it up.");
+            player.sendMessage("§cRemove the installed chest and empty vehicle storage before picking it up.");
             return;
         }
         if(d!=null){
