@@ -235,10 +235,9 @@ public final class VehicleManager {
             plugin.getLogger().warning("Cannot prepare pickup of "+v.id+": "+exception.getMessage());
             return false;
         }
-        List<Item> spawned=new ArrayList<Item>(drops.size());
+        List<Item> spawned=Collections.emptyList();
         try{
-            for(ItemStack drop:drops)spawned.add(
-                    v.location.getWorld().dropItemNaturally(v.location,drop));
+            spawned=VehiclePickupDrops.spawn(v.location.getWorld(),v.location,drops);
             // Do not allow another player's open vehicle GUI to be saved with
             // stale content while serializing the pickup.
             if(inventories!=null)inventories.captureOpen();
@@ -246,7 +245,7 @@ public final class VehicleManager {
             remaining.remove(v.id);
             store.save(remaining);
         }catch(IOException|RuntimeException error){
-            for(Item drop:spawned)if(drop!=null&&drop.isValid())drop.remove();
+            VehiclePickupDrops.rollback(spawned);
             plugin.getLogger().warning("Vehicle pickup cancelled; unable to drop/save "+v.id+": "
                     +error.getMessage());
             return false;
