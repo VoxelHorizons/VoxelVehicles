@@ -44,7 +44,7 @@ final class VehicleCollision {
         return clear(where,d,new VehicleTerrain.Space(where.getWorld()));
     }
 
-    private static boolean clear(Location where,VehicleDefinition d,VehicleTerrain.Space space){
+    static boolean clear(Location where,VehicleDefinition d,VehicleTerrain.Space space){
         Body body=new Body(where,d);
         if(!boundsValid(where.getWorld(),body))return false;
         List<VehicleTerrain.Box> overlaps=new ArrayList<VehicleTerrain.Box>();
@@ -72,12 +72,17 @@ final class VehicleCollision {
 
     static Location step(VehicleInstance v,VehicleDefinition d,double dx,double dy,double dz,
             double maxSubstep){
+        return step(v,d,dx,dy,dz,maxSubstep,
+                new VehicleTerrain.Space(v.location.getWorld()));
+    }
+
+    static Location step(VehicleInstance v,VehicleDefinition d,double dx,double dy,double dz,
+            double maxSubstep,VehicleTerrain.Space space){
         Location pos=v.location.clone();
         pos.setYaw(v.motion.yaw);
         int n=(int)Math.max(1,Math.ceil(Math.max(Math.abs(dx),
                 Math.max(Math.abs(dy),Math.abs(dz)))/maxSubstep));
         double sx=dx/n,sy=dy/n,sz=dz/n;
-        VehicleTerrain.Space space=new VehicleTerrain.Space(pos.getWorld());
         for(int i=0;i<n;i++){
             Location next=pos.clone().add(sx,sy,sz);
             if(clear(next,d,space)){pos=next;continue;}
