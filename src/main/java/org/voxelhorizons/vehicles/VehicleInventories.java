@@ -12,6 +12,8 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
+import org.voxelhorizons.content.item.ItemDefinition;
 import org.voxelhorizons.VoxelCore;
 import org.voxelhorizons.content.ContentID;
 import java.util.*;
@@ -73,7 +75,7 @@ final class VehicleInventories implements Listener {
         int storageRows=definition.inventory.effectiveStorageRows();
         int rows=Math.max(minimumRows,storageRows);
         int size=rows*9;
-        int preview=plugin.getConfig().getInt("inventory.preview-slot",11);
+        int preview=plugin.getConfig().getInt("inventory.preview-slot",10);
         if(minimumRows<1||minimumRows>6||preview<0||preview>=size){
             player.sendMessage("§cInvalid vehicle GUI dimensions or preview slot.");return false;
         }
@@ -100,6 +102,19 @@ final class VehicleInventories implements Listener {
         holder.bind(inv);
         for(int i=0;i<cargo.size();i++)if(vehicle.storage[i]!=null)
             inv.setItem(cargo.get(i),vehicle.storage[i].clone());
+        try{
+            String configuredFill=plugin.getConfig().getString("inventory.fill-item","");
+            if(configuredFill!=null&&!configuredFill.trim().isEmpty()){
+                ContentID fillId=resolveFillItem(core,configuredFill);
+                ItemStack fill=core.getItemManager().createRenderItem(fillId);
+                for(int slot:decorativeSlots(size,preview,cargo))
+                    inv.setItem(slot,fill.clone());
+            }
+        }catch(RuntimeException error){
+            plugin.getLogger().warning("Cannot create vehicle inventory filler: "+error.getMessage());
+            player.sendMessage("§cInvalid vehicle inventory.fill-item: "+error.getMessage());
+            return false;
+        }
         ContentID itemId=definition.inventory.previewItem!=null
                 ?definition.inventory.previewItem:definition.model;
         try{
@@ -139,6 +154,82 @@ final class VehicleInventories implements Listener {
         return active;
     }
 
+    /** The fill item is cosmetic; it is never part of the vehicle cargo. */
+    static List<Integer> decorativeSlots(int inventorySize,int preview,List<Integer> cargo){
+        if(inventorySize<9||inventorySize>54||inventorySize%9!=0
+                ||preview<0||preview>=inventorySize)
+            throw new IllegalArgumentException("invalid inventory layout");
+        Set<Integer> reserved=new HashSet<Integer>(cargo);
+        reserved.add(preview);
+        List<Integer> result=new ArrayList<Integer>();
+        for(int slot=0;slot<inventorySize;slot++)
+            if(!reserved.contains(slot))result.add(slot);
+        return result;
+    }
+
+    /**
+     * A VoxelCore item ID (voxel:ui-blank) or its authored model path
+     * (voxel:ui/blank) can be used. Ambiguous model paths are rejected
+     * instead of silently selecting a random item.
+     */
+    static ContentID findFillItem(Map<ContentID,ItemDefinition> definitions,
+            ContentID configured){
+        if(definitions.containsKey(configured))return configured;
+        ContentID selected=null;
+        for(ItemDefinition item:definitions.values()){
+            if(item.render()==null||item.render().model()==null)continue;
+            String model=item.render().model();
+            if(!configured.toString().equals(model))continue;
+            if(selected!=null)throw new IllegalArgumentException(
+                    "Multiple items use model "+configured+"; specify an item ID instead");
+            selected=item.id();
+        }
+        if(selected==null)throw new IllegalArgumentException(
+                "No VoxelCore item or uniquely matching item model: "+configured);
+        return selected;
+    }
+
+    private static ContentID resolveFillItem(VoxelCore core,String configured){
+        ContentID requested=ContentID.parse(configured.trim(),"voxel");
+        return findFillItem(core.getItemRegistry().entries(),requested);
+    }
+
+    /**
+     * Shift-click inserts into cargo only, never the preview or filler.
+     * Standard Bukkit inventory merges (e.g. double click to collect across
+     * the whole menu) are intentionally intercepted independently.
+     */
+    static ItemStack moveIntoCargo(Inventory top,List<Integer> slots,ItemStack source){
+        if(source==null||source.getAmount()<=0)return null;
+        int remaining=source.getAmount();
+        for(int slot:slots){
+            ItemStack existing=top.getItem(slot);
+            if(existing==null||!existing.isSimilar(source))continue;
+            int room=Math.min(existing.getMaxStackSize(),top.getMaxStackSize())-existing.getAmount();
+            if(room<=0)continue;
+            int move=Math.min(room,remaining);
+            ItemStack updated=existing.clone();
+            updated.setAmount(existing.getAmount()+move);
+            top.setItem(slot,updated);
+            remaining-=move;
+            if(remaining==0)return null;
+        }
+        for(int slot:slots){
+            ItemStack existing=top.getItem(slot);
+            if(existing!=null&&existing.getAmount()>0)continue;
+            int move=Math.min(remaining,Math.min(source.getMaxStackSize(),top.getMaxStackSize()));
+            if(move<=0)break;
+            ItemStack inserted=source.clone();
+            inserted.setAmount(move);
+            top.setItem(slot,inserted);
+            remaining-=move;
+            if(remaining==0)return null;
+        }
+        ItemStack leftover=source.clone();
+        leftover.setAmount(remaining);
+        return leftover;
+    }
+
     private String resolveTitle(Player player,String source){
         String resolved=core.getTextPlaceholderService().resolve(
                 ChatColor.translateAlternateColorCodes('&',source),true,true);
@@ -164,12 +255,26 @@ final class VehicleInventories implements Listener {
             event.setCancelled(true);
             return;
         }
+        if(event.getAction()==InventoryAction.MOVE_TO_OTHER_INVENTORY){
+            // Vanilla shift-click scans *all* available top slots, including
+            // decorative ones. Route it explicitly to authorized cargo slots.
+            event.setCancelled(true);
+            if(raw<0||session.cargoSlots.isEmpty())return;
+            ItemStack source=event.getCurrentItem();
+            if(source==null||source.getAmount()<=0)return;
+            if(raw<session.top.getSize()){
+                if(!session.cargoSlots.contains(raw))return;
+                PlayerInventory playerInventory=((Player)event.getWhoClicked()).getInventory();
+                Map<Integer,ItemStack> extra=playerInventory.addItem(source.clone());
+                event.setCurrentItem(extra.isEmpty()?null:extra.values().iterator().next());
+            }else{
+                event.setCurrentItem(moveIntoCargo(session.top,session.cargoSlots,source));
+            }
+            capture(session);
+            return;
+        }
         if(raw>=0&&raw<session.top.getSize()){
             if(!session.cargoSlots.contains(raw)){event.setCancelled(true);return;}
-        }else if(event.getAction()==InventoryAction.MOVE_TO_OTHER_INVENTORY
-                ||event.getAction()==InventoryAction.COLLECT_TO_CURSOR){
-            // These actions could steal the preview or populate locked slots.
-            event.setCancelled(true);return;
         }
         queueCapture(session);
     }
