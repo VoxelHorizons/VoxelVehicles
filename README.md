@@ -452,6 +452,31 @@ VoxelCore item, not just an unregistered resource-pack JSON.
 The preview item slot uses `inventory.preview-slot`; for the updated
 left-shifted artwork set it to `10` (zero-based, second column, middle
 row), instead of the previous `11`. This is not hardcoded Java logic.
+Both `preview-slot` and `fill-item` may now be specified either in
+`plugins/VoxelVehicles/config.yml` for all vehicles **or** in the
+individual VoxelCore `properties.vehicle.inventory` to override the global
+default. The per-vehicle keys intentionally use hyphens, matching the
+existing plugin configuration and the user's YAML. Children inheriting
+the parent's vehicle properties (e.g. `tractor-yellow`) can retain the
+same custom overrides, so a color variant needs no duplication.
+
+```yaml
+# In farming.yml -> items.tractor.properties.vehicle.inventory
+inventory:
+  enabled: true
+  storage_enabled: true
+  rows: 3
+  preview_item: voxel:tractor_icon
+  preview-slot: 10
+  fill-item: "voxel:ui/blank"
+  storage_title: "&f:offset_-8::vehicle_inventory_storage::offset_-170:&rTractor"
+  title: "&f:offset_-8::vehicle_inventory:&rTractor"
+```
+
+The per-vehicle `fill-item: ""` disables the filler even if the global
+configuration supplies one. When a per-vehicle `preview-slot` overlaps a
+cargo slot or falls outside the current GUI size, the inventory will
+report an invalid layout instead of silently hiding or deleting cargo.
 Shift-click from player inventory now only deposits to configured free
 cargo slots, combining stacks where possible; shift-clicking from
 cargo returns items to the player's inventory. When storage is disabled,
