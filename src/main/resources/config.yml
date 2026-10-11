@@ -4,3 +4,8 @@ physics:
   max-substep: 0.25
 render:
   interpolation-ticks: 1
+
+# Verify loaded entities and sweep stale vehicle renderers without loading chunks.
+# 600 ticks = 30 seconds. Minimum is 100 ticks (5 seconds).
+maintenance:
+  cleanup-ticks: 600
