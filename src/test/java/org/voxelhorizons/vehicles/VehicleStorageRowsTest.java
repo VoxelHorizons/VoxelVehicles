@@ -16,29 +16,29 @@ public class VehicleStorageRowsTest {
     }
 
     @Test public void noStorageKeepsPreviewOnly(){
-        assertTrue(VehicleInventories.storageSlots(slots(),0,11,27).isEmpty());
+        assertTrue(VehicleInventories.storageSlots(slots(),0,10,27).isEmpty());
     }
     @Test public void firstRowUsesExistingFiveSlots(){
         assertEquals(Arrays.asList(4,5,6,7,8),
-                VehicleInventories.storageSlots(slots(),1,11,27));
+                VehicleInventories.storageSlots(slots(),1,10,27));
     }
     @Test public void threeRowsPreserveExistingFifteenSlots(){
         assertEquals(slots().subList(0,15),
-                VehicleInventories.storageSlots(slots(),3,11,27));
+                VehicleInventories.storageSlots(slots(),3,10,27));
     }
     @Test public void sixRowsExposeThirtySlotsWithoutMovingEarlierOnes(){
-        assertEquals(slots(),VehicleInventories.storageSlots(slots(),6,11,54));
+        assertEquals(slots(),VehicleInventories.storageSlots(slots(),6,10,54));
     }
     @Test public void fourthRowGrowsMenuAndKeepsPreviousRows(){
         assertEquals(slots().subList(0,20),
-                VehicleInventories.storageSlots(slots(),4,11,36));
+                VehicleInventories.storageSlots(slots(),4,10,36));
     }
     @Test(expected=IllegalArgumentException.class)
     public void preventsPreviewBecomingStorage(){
-        VehicleInventories.storageSlots(Arrays.asList(4,11,8),3,11,27);
+        VehicleInventories.storageSlots(Arrays.asList(4,10,8),3,10,27);
     }
     @Test(expected=IllegalArgumentException.class)
     public void preventsDuplicateStorageSlots(){
-        VehicleInventories.storageSlots(Arrays.asList(4,4,8),1,11,27);
+        VehicleInventories.storageSlots(Arrays.asList(4,4,8),1,10,27);
     }
 }
