@@ -27,10 +27,11 @@ final class VehicleChestRenderer {
         }
         if(v.chestDisplay==null||!v.chestDisplay.isValid()){
             remove(v);
-            v.chestDisplay=v.location.getWorld().spawnEntity(
-                    renderRoot(v,d),
+            Location root=renderRoot(v,d);
+            v.chestDisplay=v.location.getWorld().spawnEntity(root,
                     EntityType.valueOf("ITEM_DISPLAY"));
             tag(v.chestDisplay,v.id);
+            v.teleports.spawned(v.chestDisplay,root);
             fixed(v.chestDisplay);
         }
         ItemStack item=c.visualItem==null?new ItemStack(c.item):
@@ -43,28 +44,42 @@ final class VehicleChestRenderer {
         matrix(v,d);
         if(c.interaction){
             if(v.chestHitbox==null||!v.chestHitbox.isValid()){
-                if(v.chestHitbox!=null)v.chestHitbox.remove();
+                if(v.chestHitbox!=null){
+                    v.teleports.forget(v.chestHitbox);
+                    v.chestHitbox.remove();
+                }
                 Location location=position(v,d).add(0,c.clickHeight/2,0);
                 v.chestHitbox=v.location.getWorld().spawnEntity(location,
                         EntityType.valueOf("INTERACTION"));
                 tag(v.chestHitbox,v.id);
+                v.teleports.spawned(v.chestHitbox,location);
             }
             invoke(v.chestHitbox,"setInteractionWidth",float.class,(float)c.clickWidth);
             invoke(v.chestHitbox,"setInteractionHeight",float.class,(float)c.clickHeight);
             invokeOptional(v.chestHitbox,"setResponsive",boolean.class,true);
-        }else if(v.chestHitbox!=null){v.chestHitbox.remove();v.chestHitbox=null;}
+        }else if(v.chestHitbox!=null){
+            v.teleports.forget(v.chestHitbox);
+            v.chestHitbox.remove();v.chestHitbox=null;
+        }
         move(v,d);
     }
 
     void move(VehicleInstance v,VehicleDefinition d){
         if(v.chestDisplay==null||!v.chestDisplay.isValid())return;
-        // Both tractor and accessory ItemDisplays MUST teleport to the same
-        // root on the same tick. The visible chest offset and orientation
-        // are baked into its local matrix, not into entity world position.
-        v.chestDisplay.teleport(renderRoot(v,d));
+        // Both ItemDisplays use the same root in the same server tick.
+        // Deduplicate only when the desired pose has not changed; never
+        // downsample real movement or break the driver/chest interpolation.
+        v.teleports.ensure(v.chestDisplay,renderRoot(v,d),true);
+        moveHitbox(v,d);
+    }
+
+    private void moveHitbox(VehicleInstance v,VehicleDefinition d){
         if(v.chestHitbox!=null&&v.chestHitbox.isValid()){
             VehicleChestDefinition c=d.inventory.chest;
-            v.chestHitbox.teleport(position(v,d).add(0,c.clickHeight/2,0));
+            // A pure tilt rotates the accessory's local matrix. The click
+            // target may move, but the display's root must NOT teleport again.
+            v.teleports.ensure(v.chestHitbox,
+                    position(v,d).add(0,c.clickHeight/2,0),false);
         }
     }
 
@@ -88,7 +103,9 @@ final class VehicleChestRenderer {
                     Math.max(0,Math.min(5,plugin.getConfig().getInt("render.tilt-interpolation-ticks",2))));
             invokeOptional(v.chestDisplay,"setInterpolationDelay",int.class,-1);
             matrix(v,d);
-            move(v,d);
+            // Only the clickable attachment centre may change on tilt.
+            // The visual ItemDisplay stays at the permanent vehicle root.
+            if(d.inventory.chest.followTilt)moveHitbox(v,d);
         }catch(Exception e){
             plugin.getLogger().warning("Cannot update chest accessory tilt "+v.id+": "+e.getMessage());
         }
@@ -147,8 +164,14 @@ final class VehicleChestRenderer {
     }
 
     void remove(VehicleInstance v){
-        if(v.chestHitbox!=null){v.chestHitbox.remove();v.chestHitbox=null;}
-        if(v.chestDisplay!=null){v.chestDisplay.remove();v.chestDisplay=null;}
+        if(v.chestHitbox!=null){
+            v.teleports.forget(v.chestHitbox);
+            v.chestHitbox.remove();v.chestHitbox=null;
+        }
+        if(v.chestDisplay!=null){
+            v.teleports.forget(v.chestDisplay);
+            v.chestDisplay.remove();v.chestDisplay=null;
+        }
     }
     private static void tag(Entity e,UUID id){
         e.addScoreboardTag("voxelvehicles");
