@@ -99,9 +99,15 @@ final class VehicleListener implements Listener {
     }
 
     private boolean suppressPickup(Player player){
-        if(player.isSneaking())return true;
-        Long last=recentRightClicks.get(player.getUniqueId());
-        return last!=null&&(player.getWorld().getFullTime()-last.longValue())<=2;
+        return shouldSuppressPickup(player.isSneaking(),
+                recentRightClicks.get(player.getUniqueId()),player.getWorld().getFullTime());
+    }
+
+    static boolean shouldSuppressPickup(boolean crouching,Long lastRightClick,long now){
+        if(crouching)return true; // Shift-right-click must never pick up a vehicle.
+        if(lastRightClick==null)return false;
+        long elapsed=now-lastRightClick.longValue();
+        return elapsed>=0&&elapsed<=2;
     }
 
     private void openInventory(Player player,VehicleInstance vehicle){
