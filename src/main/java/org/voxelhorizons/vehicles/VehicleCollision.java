@@ -74,7 +74,12 @@ final class VehicleCollision {
     /** A support contact is a collision surface less than 0.06 blocks below us. */
     static boolean supported(Location where,VehicleDefinition d,VehicleTerrain.Space space){
         Location probe=where.clone().add(0,-0.06,0);
-        return !clear(probe,d,space);
+        Body body=new Body(probe,d);
+        if(!boundsValid(where.getWorld(),body))return false;
+        List<VehicleTerrain.Box> contacts=new ArrayList<VehicleTerrain.Box>();
+        // A missing chunk is NOT a support surface.
+        return space.collisions(body.x0,body.y0,body.z0,
+                body.x1,body.y1,body.z1,contacts) && !contacts.isEmpty();
     }
 
     static final class FallResult {
