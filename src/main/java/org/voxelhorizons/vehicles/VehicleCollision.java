@@ -6,6 +6,17 @@ import org.bukkit.World;
 /** Bounded collision sampling with zero forced chunk loads. */
 final class VehicleCollision {
     private VehicleCollision(){}
+    private static final java.util.Map<World,Integer> minHeights=new java.util.WeakHashMap<World,Integer>();
+
+    private static int minHeight(World world){
+        Integer cached=minHeights.get(world);
+        if(cached!=null)return cached.intValue();
+        int value=0;
+        try{value=((Number)World.class.getMethod("getMinHeight").invoke(world)).intValue();}
+        catch(ReflectiveOperationException ignored){/* pre-1.17 worlds start at y=0 */}
+        minHeights.put(world,Integer.valueOf(value));
+        return value;
+    }
 
     static boolean clear(Location where,VehicleDefinition d){
         World world=where.getWorld();
@@ -18,7 +29,7 @@ final class VehicleCollision {
         int minX=(int)Math.floor(x-half+0.001),maxX=(int)Math.floor(x+half-0.001);
         int minZ=(int)Math.floor(z-half+0.001),maxZ=(int)Math.floor(z+half-0.001);
         int minY=(int)Math.floor(y+0.01),maxY=(int)Math.floor(y+d.height-0.01);
-        if(minY<0||maxY>=world.getMaxHeight())return false;
+        if(minY<minHeight(world)||maxY>=world.getMaxHeight())return false;
         for(int px=minX;px<=maxX;px++)for(int pz=minZ;pz<=maxZ;pz++){
             // Check before querying blocks: getBlockAt() must not force a chunk load.
             if(!world.isChunkLoaded(px>>4,pz>>4))return false;
