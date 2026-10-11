@@ -21,7 +21,6 @@ public class VehicleChestTest {
         Map<String,Object> chest=new HashMap<String,Object>();
         chest.put("enabled",true);
         chest.put("item","CHEST");
-        chest.put("slot",0);
         chest.put("visual",visual);
         return chest;
     }
@@ -75,13 +74,15 @@ public class VehicleChestTest {
         assertEquals("voxel:tractor_chest",i.chest.alternateModel.toString());
         assertFalse(i.chest.interaction);
     }
-    @Test public void customChestMaterialAndGuiSlot(){
+    @Test public void customChestMaterialAndLegacySlotIgnored(){
         Map<String,Object> c=chest("NONE");
         c.put("item","minecraft:trapped_chest");
         c.put("slot",9);
         VehicleInventoryDefinition i=inventory(c);
         assertEquals(Material.TRAPPED_CHEST,i.chest.item);
-        assertEquals(9,i.chest.slot);
+        assertEquals(Material.TRAPPED_CHEST,i.chest.item);
+        // chest.slot is accepted for backward-compatible YAML but does not
+        // reserve a GUI cell, and no chest button is created.
     }
     @Test(expected=IllegalArgumentException.class)
     public void rejectUnsupportedChestOptions(){
@@ -90,7 +91,7 @@ public class VehicleChestTest {
         inventory(c);
     }
     @Test(expected=IllegalArgumentException.class)
-    public void rejectChestSlotOutsideMenu(){
+    public void rejectInvalidDeprecatedChestSlot(){
         Map<String,Object> c=chest("NONE");
         c.put("slot",54);
         inventory(c);
@@ -101,6 +102,25 @@ public class VehicleChestTest {
         ((Map<String,Object>)c.get("visual")).remove("model_item");
         inventory(c);
     }
+    @Test public void chestInstallsOnlyWithSneakAndMatchingItem(){
+        assertTrue(VehicleListener.shouldAttemptChestInstall(true,true,true,true,3,
+                Material.CHEST,Material.CHEST));
+        assertFalse(VehicleListener.shouldAttemptChestInstall(false,true,true,true,3,
+                Material.CHEST,Material.CHEST));
+        assertFalse(VehicleListener.shouldAttemptChestInstall(true,true,true,true,3,
+                Material.DIRT,Material.CHEST));
+        assertFalse(VehicleListener.shouldAttemptChestInstall(true,true,true,true,3,
+                Material.AIR,Material.CHEST));
+        assertFalse(VehicleListener.shouldAttemptChestInstall(true,false,true,true,3,
+                Material.CHEST,Material.CHEST));
+        assertFalse(VehicleListener.shouldAttemptChestInstall(true,true,false,true,3,
+                Material.CHEST,Material.CHEST));
+        assertFalse(VehicleListener.shouldAttemptChestInstall(true,true,true,false,3,
+                Material.CHEST,Material.CHEST));
+        assertFalse(VehicleListener.shouldAttemptChestInstall(true,true,true,true,0,
+                Material.CHEST,Material.CHEST));
+    }
+
     @Test public void accessoryDisabledMeansNoVisualOrHitbox(){
         VehicleInventoryDefinition i=inventory(chest("NONE"));
         assertEquals(VehicleChestDefinition.VisualMode.NONE,i.chest.mode);
