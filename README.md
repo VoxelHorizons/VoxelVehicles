@@ -335,3 +335,68 @@ density and intervals to prevent excessive particle traffic. Changes to
 existing vehicles take effect on successful `/vc admin content reload`.
 The emitter config is inherited normally by child items such as a
 colored `tractor-yellow` variant.
+
+
+## Vehicle inventory overlays and GUI model previews
+
+Vehicle inventories use a **normal 3-row chest GUI**, allowing the resource
+pack to draw the user's existing background glyphs in the inventory title:
+`vehicle_inventory` (no storage) and `vehicle_inventory_storage` (storage).
+These are **example aliases only**, configured in `plugins/VoxelVehicles/config.yml`
+under `inventory.titles`; the Java plugin never hardcodes those alias names.
+VoxelCore's live `TextPlaceholderService` resolves the title just before opening
+the screen. All configured title offsets and glyphs are therefore hot-reloadable
+with `/vc admin content reload` and adjustable without rebuilding the plugin.
+
+The mock-up uses 27 slots. The dark 3x3 preview window is left (columns 2–4),
+the right-hand 15 cargo slots are configurable, and the actual single preview
+item is rendered at slot 11, locked from clicks and drags. All GUI positions
+and title templates are editable in VoxelVehicles `config.yml`.
+
+On each vehicle definition, configure `properties.vehicle.inventory`:
+
+```yaml
+# Vehicle with a 15-slot boot/cargo compartment:
+inventory:
+  enabled: true
+  storage_size: 15
+  preview_item: voxel:tractor_inventory_preview
+
+# Vehicles with no storage can omit inventory entirely (enabled by default).
+# A vehicle can also override a global title on a per-type basis:
+# inventory:
+#   storage_size: 0
+#   title: "&f:offset_-8::my_custom_vehicle_gui:"
+```
+
+The optional `preview_item` is a **separate VoxelCore item definition** whose
+resource-pack model can supply an enlarged `display.gui` transformation. If
+omitted, the menu previews `vehicle.model_item`. Use the existing tractor
+model as a parent/resource-pack texture source, but give the GUI preview model
+its own `display.gui` scale, rotation and translation so that the renderer can
+bleed into the black area. **Minecraft still renders this as an inventory
+ItemStack, not as a live entity**; it will not spin with the cursor unless
+additional client functionality is added. The rendered item copies placed
+vehicle dye color if both the item and its VoxelCore definition are dyeable.
+The preview item is locked and never counted as cargo.
+
+To open a vehicle inventory, **sneak and right-click** an unoccupied vehicle
+while holding a non-block item, or use `/vv inventory` while riding / near
+the vehicle. A normal right-click continues to mount. Permission
+`voxelvehicles.inventory` is granted to players by default. Storage and
+preview capacity can be configured independently per vehicle. The UI shows
+the no-storage title if `storage_size: 0`, and the storage variant when
+`storage_size > 0`.
+
+Vehicle storage is saved in `vehicles.yml` under the stable per-instance
+UUID, using Bukkit ItemStack serialization. The current version supports a
+single viewer per vehicle inventory. Shift-clicking *from* the player's
+inventory into the menu is intentionally blocked to prevent items entering
+locked slots; manual placement into the authorized cargo slots and normal
+extraction work. Double-click collection is also guarded. Pickup/removal of a
+vehicle containing cargo is blocked so players cannot lose contents.
+The menu does not currently migrate cargo into the picked-up vehicle item.
+
+The new system introduces no client mod, fake horse, or server-rendered GUI
+entities. Because the preview uses vanilla item rendering, your resource pack
+must do the GUI scale/translation work.
