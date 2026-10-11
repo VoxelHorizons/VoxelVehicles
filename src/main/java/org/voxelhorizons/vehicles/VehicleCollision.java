@@ -21,11 +21,8 @@ final class VehicleCollision {
     static boolean clear(Location where,VehicleDefinition d){
         World world=where.getWorld();
         double half=d.width*0.5;
-        double angle=Math.toRadians(where.getYaw());
-        double sin=Math.sin(angle),cos=Math.cos(angle);
-        double x=where.getX()+d.hitboxX*cos-d.hitboxZ*sin;
-        double y=where.getY()+d.hitboxY;
-        double z=where.getZ()+d.hitboxX*sin+d.hitboxZ*cos;
+        Location base=VehicleTransform.collisionBase(where,d);
+        double x=base.getX(), y=base.getY(), z=base.getZ();
         int minX=(int)Math.floor(x-half+0.001),maxX=(int)Math.floor(x+half-0.001);
         int minZ=(int)Math.floor(z-half+0.001),maxZ=(int)Math.floor(z+half-0.001);
         int minY=(int)Math.floor(y+0.01),maxY=(int)Math.floor(y+d.height-0.01);
