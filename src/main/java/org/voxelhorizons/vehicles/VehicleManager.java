@@ -91,7 +91,10 @@ public final class VehicleManager {
                     plugin.getLogger().warning("Could not repair "+v.id+": "+e.getMessage());
                 }
             }else{
-                try{renderer.refresh(v,d);}catch(Exception e){
+                try{
+                    VehicleSuspension.initialize(v,d);
+                    renderer.refresh(v,d);
+                }catch(Exception e){
                     plugin.getLogger().warning("Could not refresh "+v.id+": "+e.getMessage());
                 }
             }
@@ -263,6 +266,7 @@ public final class VehicleManager {
     }
 
     private void activate(VehicleInstance v,VehicleDefinition d){
+        VehicleSuspension.initialize(v,d);
         renderer.activate(v,d);
         index(v);
     }
@@ -325,6 +329,10 @@ public final class VehicleManager {
                     deindex(v);renderer.unseat(v,d);index(v);iter.remove();
                 }
             }
+            // Sample the four wheel positions each occupied tick. Only the
+            // visual model changes, never the passenger or hitbox orientation.
+            if(v.driver!=null&&VehicleSuspension.update(v,d))
+                renderer.updateTilt(v,d);
         }
         int interval=Math.max(20,plugin.getConfig().getInt("physics.autosave-ticks",200));
         if(++ticks%interval==0&&dirty)save();
