@@ -22,6 +22,7 @@ public final class VehicleManager {
     private final VoxelCore core;
     private final VehicleStore store;
     private final VehicleRenderer renderer;
+    private final VehicleParticles particles;
     private final Map<UUID,VehicleInstance> instances=new LinkedHashMap<UUID,VehicleInstance>();
     private final Map<UUID,UUID> entityIndex=new HashMap<UUID,UUID>();
     // Dedicated hot path: never scan unloaded or parked instances each server tick.
@@ -34,6 +35,7 @@ public final class VehicleManager {
     VehicleManager(VoxelVehicles plugin,VoxelCore core){
         this.plugin=plugin;this.core=core;
         this.renderer=new VehicleRenderer(plugin);
+        this.particles=new VehicleParticles(plugin);
         this.store=new VehicleStore(new File(plugin.getDataFolder(),"vehicles.yml"));
     }
 
@@ -364,6 +366,8 @@ public final class VehicleManager {
             if(v.driver!=null&&VehicleSuspension.update(v,d,terrain))
                 renderer.updateTilt(v,d);
         }
+        // Effects use the same single server tick: no per-vehicle timers or entities.
+        particles.tick(instances.values(),definitions,ticks);
         int interval=Math.max(20,plugin.getConfig().getInt("physics.autosave-ticks",200));
         if(++ticks%interval==0&&dirty)save();
     }
