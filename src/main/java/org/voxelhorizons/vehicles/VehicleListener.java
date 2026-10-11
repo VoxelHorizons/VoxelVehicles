@@ -11,6 +11,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
@@ -73,6 +74,16 @@ final class VehicleListener implements Listener {
             return;
         }
         if(!vehicles.mount(v,player))player.sendMessage("§cThis vehicle is already occupied or access is denied.");
+    }
+
+    /**
+     * The hit-position variant has its own handler registration on some
+     * server versions. Handle sneak use from either event path; the menu
+     * de-duplicates repeated opens of the same vehicle.
+     */
+    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=false)
+    public void interactAt(PlayerInteractAtEntityEvent event){
+        if(event.getPlayer().isSneaking())interact(event);
     }
 
     /**
