@@ -339,7 +339,7 @@ colored `tractor-yellow` variant.
 
 ## Vehicle inventory overlays and GUI model previews
 
-Vehicle inventories use a **normal 3-row chest GUI**, allowing the resource
+Vehicle inventories use a **normal chest GUI**, three rows by default, allowing the resource
 pack to draw the user's existing background glyphs in the inventory title:
 `vehicle_inventory` (no storage) and `vehicle_inventory_storage` (storage).
 These are **example aliases only**, configured in `plugins/VoxelVehicles/config.yml`
@@ -348,7 +348,7 @@ VoxelCore's live `TextPlaceholderService` resolves the title just before opening
 the screen. All configured title offsets and glyphs are therefore hot-reloadable
 with `/vc admin content reload` and adjustable without rebuilding the plugin.
 
-The mock-up uses 27 slots. The dark 3x3 preview window is left (columns 2–4),
+The supplied mock-up uses 27 slots. The dark 3x3 preview window is left (columns 2–4),
 the right-hand 15 cargo slots are configurable, and the actual single preview
 item is rendered at slot 11, locked from clicks and drags. All GUI positions
 and title templates are editable in VoxelVehicles `config.yml`.
@@ -356,16 +356,16 @@ and title templates are editable in VoxelVehicles `config.yml`.
 On each vehicle definition, configure `properties.vehicle.inventory`:
 
 ```yaml
-# Vehicle with a 15-slot boot/cargo compartment:
+# A vehicle with three rows of storage in the right-hand panel:
 inventory:
   enabled: true
-  storage_size: 15
-  preview_item: voxel:tractor_inventory_preview
+  rows: 3
+  preview_item: voxel:tractor_icon
 
-# Vehicles with no storage can omit inventory entirely (enabled by default).
-# A vehicle can also override a global title on a per-type basis:
+# For a preview-only menu use rows: 0 or omit inventory.rows.
+# A vehicle can override the title for its menu type:
 # inventory:
-#   storage_size: 0
+#   rows: 0
 #   title: "&f:offset_-8::my_custom_vehicle_gui:"
 ```
 
@@ -384,9 +384,19 @@ To open a vehicle inventory, **sneak and right-click** an unoccupied vehicle
 while holding a non-block item, or use `/vv inventory` while riding / near
 the vehicle. A normal right-click continues to mount. Permission
 `voxelvehicles.inventory` is granted to players by default. Storage and
-preview capacity can be configured independently per vehicle. The UI shows
-the no-storage title if `storage_size: 0`, and the storage variant when
-`storage_size > 0`.
+preview item can be configured independently per vehicle. The UI shows
+the no-storage title if `inventory.rows: 0`, and the storage variant when
+`inventory.rows` is 1–6. The visible cargo slots are determined directly
+from the `storage-slots` list in VoxelVehicles config.yml. In the example
+layout each row adds 5 slots: 1 row = 5, 2 rows = 10, 3 rows = 15, up to
+6 rows = 30. The first three rows (slots 4–8, 13–17 and 22–26) have not
+been changed; additional rows use configurable slots 31–35, 40–44 and 49–53.
+GUI size defaults to a minimum of three rows to preserve the existing
+preview window. A vehicle asking for four to six cargo rows opens a taller
+GUI and needs a correspondingly taller resource-pack background glyph.
+The `inventory.rows` in **VoxelVehicles config.yml** is the minimum GUI
+height; the `inventory.rows` in **VoxelCore properties.vehicle** is the
+number of enabled cargo rows.
 
 Vehicle storage is saved in `vehicles.yml` under the stable per-instance
 UUID, using Bukkit ItemStack serialization. The current version supports a
