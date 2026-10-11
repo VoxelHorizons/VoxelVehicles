@@ -36,6 +36,7 @@ final class VehicleTeleportTracker {
     }
 
     private final Map<UUID,Pose> last=new HashMap<UUID,Pose>(5);
+    private int sent,avoided;
 
     /**
      * Exact comparison: no positional epsilon or frame skipping, which would
@@ -68,9 +69,13 @@ final class VehicleTeleportTracker {
     boolean ensure(Entity entity,Location target,boolean rotationMatters){
         if(entity==null||!entity.isValid())return false;
         UUID id=entity.getUniqueId();
-        if(!changed(last.get(id),target,rotationMatters))return true;
+        if(!changed(last.get(id),target,rotationMatters)){
+            avoided++;
+            return true;
+        }
         if(!entity.teleport(target))return false;
         last.put(id,new Pose(target));
+        sent++;
         return true;
     }
 
@@ -79,9 +84,16 @@ final class VehicleTeleportTracker {
         if(entity!=null&&initial!=null)last.put(entity.getUniqueId(),new Pose(initial));
     }
 
+    /** Upper 32 bits: sent; lower 32 bits: redundant calls avoided. */
+    long drainCounts(){
+        long packed=((long)sent<<32)|(avoided&0xffffffffL);
+        sent=0;avoided=0;
+        return packed;
+    }
+
     void forget(Entity entity){
         if(entity!=null)last.remove(entity.getUniqueId());
     }
 
-    void clear(){last.clear();}
+    void clear(){last.clear();sent=0;avoided=0;}
 }
