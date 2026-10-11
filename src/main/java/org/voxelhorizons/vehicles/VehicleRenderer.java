@@ -60,8 +60,25 @@ final class VehicleRenderer {
         invoke(vehicle.hitbox,"setInteractionWidth",float.class,(float)definition.width);
         invoke(vehicle.hitbox,"setInteractionHeight",float.class,(float)definition.height);
         invokeOptional(vehicle.hitbox,"setResponsive",boolean.class,true);
-        applyMatrix(vehicle.display,definition,vehicle.linkedSeat,vehicle.passengerOffsetY);
+        applyMatrix(vehicle.display,definition,vehicle.linkedSeat,vehicle.passengerOffsetY,
+                vehicle.visualPitch,vehicle.visualRoll);
         move(vehicle,definition);
+    }
+
+    /** Transform metadata only: passenger chain stays upright and anchored. */
+    void updateTilt(VehicleInstance vehicle,VehicleDefinition definition){
+        if(vehicle.display==null||!vehicle.display.isValid())return;
+        try{
+            // A small metadata interpolation smooths model pitching without
+            // delaying ItemDisplay world teleports or changing rider physics.
+            invokeOptional(vehicle.display,"setInterpolationDuration",int.class,
+                    Math.max(0,Math.min(5,plugin.getConfig().getInt("render.tilt-interpolation-ticks",2))));
+            invokeOptional(vehicle.display,"setInterpolationDelay",int.class,-1);
+            applyMatrix(vehicle.display,definition,vehicle.linkedSeat,vehicle.passengerOffsetY,
+                    vehicle.visualPitch,vehicle.visualRoll);
+        }catch(Exception error){
+            plugin.getLogger().warning("Could not tilt vehicle model "+vehicle.id+": "+error.getMessage());
+        }
     }
 
     void move(VehicleInstance vehicle,VehicleDefinition definition){
@@ -117,7 +134,8 @@ final class VehicleRenderer {
             // model root will visibly oscillate relative to that player.
             invokeOptional(vehicle.display,"setTeleportDuration",int.class,
                     linked?mountedInterpolation():interpolation());
-            applyMatrix(vehicle.display,definition,linked,vehicle.passengerOffsetY);
+            applyMatrix(vehicle.display,definition,linked,vehicle.passengerOffsetY,
+                    vehicle.visualPitch,vehicle.visualRoll);
             move(vehicle,definition);
             if(!linked)plugin.getLogger().warning("Display passenger link not supported; vehicle "
                     +vehicle.id+" is using independent seat teleports.");
@@ -148,7 +166,8 @@ final class VehicleRenderer {
         vehicle.stop();
         if(definition!=null&&vehicle.display!=null&&vehicle.display.isValid()){
             try {
-                applyMatrix(vehicle.display,definition,false,0);
+                applyMatrix(vehicle.display,definition,false,0,
+                        vehicle.visualPitch,vehicle.visualRoll);
                 invokeOptional(vehicle.display,"setTeleportDuration",int.class,interpolation());
                 move(vehicle,definition);
             }catch(Exception ex){plugin.getLogger().warning("Seat reset failed: "+ex.getMessage());}
@@ -195,8 +214,8 @@ final class VehicleRenderer {
     }
 
     /** On a mounted vehicle the model offsets back from the seat-root origin. */
-    private static void applyMatrix(Entity entity,VehicleDefinition definition,boolean mounted,double passengerOffsetY)
-            throws Exception {
+    private static void applyMatrix(Entity entity,VehicleDefinition definition,boolean mounted,
+            double passengerOffsetY,double pitch,double roll) throws Exception {
         Class<?> matrix=Class.forName("org.joml.Matrix4f");
         Object value=matrix.getConstructor().newInstance();
         if(mounted){
@@ -206,6 +225,12 @@ final class VehicleRenderer {
                     value,(float)-definition.seatX,
                     (float)(passengerOffsetY-definition.seatY),(float)-definition.seatZ);
         }
+        // Cosmetic rotations affect only model vertices. Never tilt the
+        // ItemDisplay entity or its passenger riding position.
+        if(Math.abs(pitch)>0.001)
+            matrix.getMethod("rotateX",float.class).invoke(value,(float)Math.toRadians(-pitch));
+        if(Math.abs(roll)>0.001)
+            matrix.getMethod("rotateZ",float.class).invoke(value,(float)Math.toRadians(roll));
         matrix.getMethod("scale",float.class,float.class,float.class).invoke(
                 value,(float)definition.scale,(float)definition.scale,(float)definition.scale);
         entity.getClass().getMethod("setTransformationMatrix",matrix).invoke(entity,value);
