@@ -173,25 +173,37 @@ final class VehicleInventories implements Listener {
      * instead of silently selecting a random item.
      */
     static ContentID findFillItem(Map<ContentID,ItemDefinition> definitions,
-            ContentID configured){
-        if(definitions.containsKey(configured))return configured;
+            String configured){
+        String reference=configured==null?"":configured.trim().toLowerCase(Locale.ROOT);
+        if(reference.isEmpty())throw new IllegalArgumentException("fill-item must not be empty");
+        // VoxelCore ContentIDs prohibit '/', but resource-pack model IDs use
+        // paths such as voxel:ui/blank. Treat those as model paths, not IDs.
+        if(reference.indexOf('/')<0){
+            try{
+                ContentID direct=ContentID.parse(reference,"voxel");
+                if(definitions.containsKey(direct))return direct;
+            }catch(IllegalArgumentException ignored){
+                // Try an authored model alias before reporting the error.
+            }
+        }
         ContentID selected=null;
         for(ItemDefinition item:definitions.values()){
             if(item.render()==null||item.render().model()==null)continue;
-            String model=item.render().model();
-            if(!configured.toString().equals(model))continue;
+            String model=item.render().model().toLowerCase(Locale.ROOT);
+            String qualified=model.indexOf(':')<0
+                    ?item.id().namespace()+":"+model:model;
+            if(!reference.equals(qualified))continue;
             if(selected!=null)throw new IllegalArgumentException(
-                    "Multiple items use model "+configured+"; specify an item ID instead");
+                    "Multiple items use model "+reference+"; specify an item ID instead");
             selected=item.id();
         }
         if(selected==null)throw new IllegalArgumentException(
-                "No VoxelCore item or uniquely matching item model: "+configured);
+                "No VoxelCore item or uniquely matching item model: "+reference);
         return selected;
     }
 
     private static ContentID resolveFillItem(VoxelCore core,String configured){
-        ContentID requested=ContentID.parse(configured.trim(),"voxel");
-        return findFillItem(core.getItemRegistry().entries(),requested);
+        return findFillItem(core.getItemRegistry().entries(),configured);
     }
 
     /**
