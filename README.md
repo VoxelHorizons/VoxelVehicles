@@ -710,3 +710,24 @@ entity teleport implementation remain important workloads. This PR does
 not bypass Bukkit entity safety, send raw movement packets, asynchronously
 mutate worlds, or reduce collision and passenger correctness in order to
 meet an unmeasured vehicle-count target.
+
+
+## Reclaiming vehicles with chest storage (PR #13)
+
+**Left-click the vehicle body** to pick it up, even if a chest upgrade is
+installed and the vehicle's inventory contains items. The vehicle drops
+its normal (including dyed) VoxelCore item **alongside the exact installed
+chest item and every stack of stored cargo** at the vehicle's location.
+Cargo in hidden, currently disabled or later GUI rows is also returned.
+Nothing needs to be emptied or detached first.
+
+- Owner/admin checks and existing right-click mount/shift-right-click
+  inventory controls are unchanged.
+- Left-clicking the **chest accessory itself** retains its existing
+  separate-detach behavior (only when storage is empty). To pick up the
+  whole vehicle and all cargo, left-click the main vehicle body.
+- If a vehicle inventory is open, it is captured and closed before items
+  are prepared. Invalid drop items, rejected world spawns or failed
+  persistence cancel the pickup instead of silently discarding cargo.
+- `/vv remove` remains an administrator-only removal command, not
+  the player's vehicle reclaim action.
