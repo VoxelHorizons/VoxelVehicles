@@ -17,7 +17,7 @@ final class VehicleCommand implements CommandExecutor,TabCompleter {
     VehicleCommand(VehicleManager vehicles,VoxelCore core){this.vehicles=vehicles;this.core=core;}
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
         if(!sender.hasPermission("voxelvehicles.admin")){sender.sendMessage("§cNo permission.");return true;}
-        if(args.length==0){sender.sendMessage("§7/vv <list|spawn <namespace:id>|remove|reload>");return true;}
+        if(args.length==0){sender.sendMessage("§7/vv <list|spawn <namespace:id>|remove|reload|cleanup|sync>");return true;}
         String action=args[0].toLowerCase(Locale.ROOT);
         if("list".equals(action)){
             sender.sendMessage("§6VoxelVehicles: §f"+vehicles.definitions().keySet());return true;
@@ -27,6 +27,14 @@ final class VehicleCommand implements CommandExecutor,TabCompleter {
             catch(RuntimeException error){sender.sendMessage("§cInvalid vehicle config: "+error.getMessage());}
             return true;
         }
+        if("cleanup".equals(action)){
+            int removed=vehicles.cleanupLoadedOrphans();
+            sender.sendMessage("§aRemoved "+removed+" orphaned vehicle entities.");return true;
+        }
+        if("sync".equals(action)){
+            vehicles.synchronizeLoaded();
+            sender.sendMessage("§aSynchronized loaded vehicles with VoxelCore.");return true;
+        }
         if(!(sender instanceof Player)){sender.sendMessage("§cRequires a player.");return true;}
         Player player=(Player)sender;
         if("spawn".equals(action)){
@@ -35,8 +43,9 @@ final class VehicleCommand implements CommandExecutor,TabCompleter {
                 ContentID id=ContentID.parse(args[1],"voxel");
                 Location at=player.getLocation().clone();
                 at.setYaw(player.getLocation().getYaw());
-                sender.sendMessage(vehicles.spawn(id,player.getUniqueId(),at).isPresent()
-                        ?"§aVehicle spawned.":"§cUnknown vehicle or blocked location.");
+                VehicleManager.SpawnResult result=vehicles.trySpawn(id,player.getUniqueId(),at,null);
+                sender.sendMessage(result.successful()?
+                        "§aVehicle spawned.":"§cCannot spawn "+id+": "+result.failure);
             }catch(IllegalArgumentException e){sender.sendMessage("§c"+e.getMessage());}
             return true;
         }
@@ -58,7 +67,7 @@ final class VehicleCommand implements CommandExecutor,TabCompleter {
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String label,String[] args){
         if(!sender.hasPermission("voxelvehicles.admin"))return Collections.emptyList();
         List<String> out=new ArrayList<String>();
-        if(args.length==1)out.addAll(Arrays.asList("list","spawn","remove","reload"));
+        if(args.length==1)out.addAll(Arrays.asList("list","spawn","remove","reload","cleanup","sync"));
         else if(args.length==2&&"spawn".equalsIgnoreCase(args[0]))
             for(ContentID id:vehicles.definitions().keySet())out.add(id.toString());
         String prefix=args[args.length-1].toLowerCase(Locale.ROOT);

@@ -15,6 +15,9 @@ public final class VehicleInstance {
     public Location location;
     public Entity display,hitbox,seat;
     public UUID driver;
+    /** True while the seat rides the ItemDisplay as one movement root. */
+    public boolean linkedSeat;
+    public double passengerOffsetY;
     public VehiclePhysics.Input input=VehiclePhysics.Input.NEUTRAL;
     public VehicleInstance(UUID id,ContentID type,UUID owner,Location location) {
         this(id,type,owner,location,null);

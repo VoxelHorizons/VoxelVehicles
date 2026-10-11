@@ -13,6 +13,8 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerAnimationEvent;
+import org.bukkit.event.player.PlayerAnimationType;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.inventory.EquipmentSlot;
@@ -39,8 +41,12 @@ final class VehicleListener implements Listener {
         if(!id.isPresent()||!vehicles.definition(id.get()).isPresent())return;
         Location target=event.getClickedBlock().getRelative(event.getBlockFace()).getLocation().add(0.5,0,0.5);
         target.setYaw(player.getLocation().getYaw());
-        Optional<VehicleInstance> result=vehicles.spawn(id.get(),player.getUniqueId(),target,hand);
-        if(!result.isPresent()){player.sendMessage("§cCannot place a vehicle here.");return;}
+        VehicleManager.SpawnResult result=vehicles.trySpawn(id.get(),player.getUniqueId(),target,hand);
+        if(!result.successful()){
+            player.sendMessage("§cCannot place "+id.get()+": "+result.failure);
+            event.setCancelled(true);
+            return;
+        }
         if(player.getGameMode()!=GameMode.CREATIVE){
             hand.setAmount(hand.getAmount()-1);
         }
@@ -64,23 +70,45 @@ final class VehicleListener implements Listener {
         if(vehicles.byEntity(event.getEntity()).isPresent())event.setCancelled(true);
     }
 
+    /**
+     * EntityDamageByEntityEvent handles attacks on the visible or interaction entity
+     * when the server sends that event. No crouch is required to reclaim a vehicle.
+     */
     @EventHandler(priority=EventPriority.HIGHEST)
     public void pickup(EntityDamageByEntityEvent event){
         VehicleInstance v=vehicles.byEntity(event.getEntity()).orElse(null);
         if(v==null||!(event.getDamager() instanceof Player))return;
         event.setCancelled(true);
-        Player player=(Player)event.getDamager();
-        if(!player.isSneaking()||!v.owner.equals(player.getUniqueId())&&!player.hasPermission("voxelvehicles.admin"))return;
+        collect(v,(Player)event.getDamager());
+    }
+
+    /**
+     * Some server versions don't fire damage events for invulnerable Interaction
+     * entities. Left-click arm-swing plus a precise look-ray fallback supports those.
+     */
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void punch(PlayerAnimationEvent event){
+        if(event.getAnimationType()!=PlayerAnimationType.ARM_SWING)return;
+        VehicleInstance v=vehicles.targeted(event.getPlayer(),5.0).orElse(null);
+        if(v!=null)collect(v,event.getPlayer());
+    }
+
+    private void collect(VehicleInstance v,Player player){
+        if(v.driver!=null)return;
+        if(!v.owner.equals(player.getUniqueId())
+                &&!player.hasPermission("voxelvehicles.admin"))return;
         VehicleDefinition d=vehicles.definition(v.type).orElse(null);
         if(!vehicles.remove(v))return;
-        if(d!=null&&player.getGameMode()!=GameMode.CREATIVE){
+        if(d!=null){
+            // Drop back into the world so creative and survival players can both
+            // reclaim a vehicle without losing its normal VoxelCore item identity.
             ItemStack drop=core.getItemManager().createItem(d.drop);
             if(v.dyeColor!=null&&core.getItemManager().isDyeable(drop))
                 drop=core.getItemManager().setDyeColor(drop,v.dyeColor.intValue());
-            for(ItemStack overflow:player.getInventory().addItem(drop).values())
-                player.getWorld().dropItemNaturally(player.getLocation(),overflow);
+            player.getWorld().dropItemNaturally(v.location,drop);
         }
     }
+
     @EventHandler public void leave(PlayerQuitEvent event){vehicles.dismount(event.getPlayer());}
     @EventHandler public void load(ChunkLoadEvent event){vehicles.loadChunk(event.getChunk());}
     @EventHandler public void unload(ChunkUnloadEvent event){vehicles.unloadChunk(event.getChunk());}
