@@ -75,7 +75,9 @@ final class VehicleInventories implements Listener {
         int storageRows=definition.inventory.effectiveStorageRows();
         int rows=Math.max(minimumRows,storageRows);
         int size=rows*9;
-        int preview=plugin.getConfig().getInt("inventory.preview-slot",10);
+        int preview=definition.inventory.previewSlot!=null
+                ?definition.inventory.previewSlot.intValue()
+                :plugin.getConfig().getInt("inventory.preview-slot",10);
         if(minimumRows<1||minimumRows>6||preview<0||preview>=size){
             player.sendMessage("§cInvalid vehicle GUI dimensions or preview slot.");return false;
         }
@@ -103,7 +105,9 @@ final class VehicleInventories implements Listener {
         for(int i=0;i<cargo.size();i++)if(vehicle.storage[i]!=null)
             inv.setItem(cargo.get(i),vehicle.storage[i].clone());
         try{
-            String configuredFill=plugin.getConfig().getString("inventory.fill-item","");
+            String configuredFill=definition.inventory.fillItem!=null
+                    ?definition.inventory.fillItem
+                    :plugin.getConfig().getString("inventory.fill-item","");
             if(configuredFill!=null&&!configuredFill.trim().isEmpty()){
                 ContentID fillId=resolveFillItem(core,configuredFill);
                 ItemStack fill=core.getItemManager().createRenderItem(fillId);
