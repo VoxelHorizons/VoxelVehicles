@@ -3,7 +3,12 @@ physics:
   autosave-ticks: 200
   max-substep: 0.25
 render:
+  # Interpolate world movement on parked vehicles.
   interpolation-ticks: 1
+  # Important: do not disable this on mounted vehicles. The passenger's
+  # movement is already smoothed by Minecraft; model snapping causes jitter.
+  # 1 = smooth one-tick interpolation; 2-3 can be tested on slower networks.
+  mounted-interpolation-ticks: 1
 
 # Verify loaded entities and sweep stale vehicle renderers without loading chunks.
 # 600 ticks = 30 seconds. Minimum is 100 ticks (5 seconds).
