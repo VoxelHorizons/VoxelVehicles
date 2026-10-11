@@ -231,12 +231,17 @@ final class VehicleInventories implements Listener {
         ItemMeta fillMeta=decorated.getItemMeta();
         ItemMeta previewMeta=preview.getItemMeta();
         if(fillMeta==null)return decorated;
+        copyPreviewHover(fillMeta,previewMeta);
+        decorated.setItemMeta(fillMeta);
+        return decorated;
+    }
+
+    /** The metadata copy is testable without a running Bukkit item factory. */
+    static void copyPreviewHover(ItemMeta fillMeta,ItemMeta previewMeta){
         fillMeta.setDisplayName(previewMeta!=null&&previewMeta.hasDisplayName()
                 ?previewMeta.getDisplayName():null);
         fillMeta.setLore(previewMeta!=null&&previewMeta.hasLore()
                 ?new ArrayList<String>(previewMeta.getLore()):null);
-        decorated.setItemMeta(fillMeta);
-        return decorated;
     }
 
     /**
