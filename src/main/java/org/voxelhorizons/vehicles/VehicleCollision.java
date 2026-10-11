@@ -24,7 +24,7 @@ final class VehicleCollision {
         return value;
     }
 
-    private static final class Body {
+    static final class Body {
         final double x0,y0,z0,x1,y1,z1;
         Body(Location at,VehicleDefinition d){
             Location base=VehicleTransform.collisionBase(at,d);
