@@ -6,6 +6,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.voxelhorizons.VoxelCore;
 import org.voxelhorizons.content.ContentID;
 import org.voxelhorizons.content.item.ItemDefinition;
@@ -64,12 +65,20 @@ public final class VehicleManager {
     }
 
     public Optional<VehicleInstance> spawn(ContentID type,UUID owner,Location at){
+        return spawn(type,owner,at,null);
+    }
+
+    /** Copies VoxelCore's mutable per-stack color before consuming the source item. */
+    public Optional<VehicleInstance> spawn(ContentID type,UUID owner,Location at,ItemStack source){
         VehicleDefinition d=definitions.get(type);
         if(d==null||at.getWorld()==null||!at.getWorld().isChunkLoaded(at.getBlockX()>>4,at.getBlockZ()>>4))
             return Optional.empty();
         Location where=at.clone();where.setPitch(0);
         if(!VehicleCollision.clear(where,d))return Optional.empty();
-        VehicleInstance v=new VehicleInstance(UUID.randomUUID(),type,owner,where);
+        Integer dyeColor=null;
+        if(source!=null&&core.getItemManager().isDyeable(source))
+            dyeColor=core.getItemManager().getDyeColor(source).orElse(null);
+        VehicleInstance v=new VehicleInstance(UUID.randomUUID(),type,owner,where,dyeColor);
         try{activate(v,d);}catch(RuntimeException e){
             plugin.getLogger().warning("Vehicle spawn failed: "+e.getMessage());return Optional.empty();
         }

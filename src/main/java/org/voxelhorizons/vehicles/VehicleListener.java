@@ -39,7 +39,7 @@ final class VehicleListener implements Listener {
         if(!id.isPresent()||!vehicles.definition(id.get()).isPresent())return;
         Location target=event.getClickedBlock().getRelative(event.getBlockFace()).getLocation().add(0.5,0,0.5);
         target.setYaw(player.getLocation().getYaw());
-        Optional<VehicleInstance> result=vehicles.spawn(id.get(),player.getUniqueId(),target);
+        Optional<VehicleInstance> result=vehicles.spawn(id.get(),player.getUniqueId(),target,hand);
         if(!result.isPresent()){player.sendMessage("§cCannot place a vehicle here.");return;}
         if(player.getGameMode()!=GameMode.CREATIVE){
             hand.setAmount(hand.getAmount()-1);
@@ -75,6 +75,8 @@ final class VehicleListener implements Listener {
         if(!vehicles.remove(v))return;
         if(d!=null&&player.getGameMode()!=GameMode.CREATIVE){
             ItemStack drop=core.getItemManager().createItem(d.drop);
+            if(v.dyeColor!=null&&core.getItemManager().isDyeable(drop))
+                drop=core.getItemManager().setDyeColor(drop,v.dyeColor.intValue());
             for(ItemStack overflow:player.getInventory().addItem(drop).values())
                 player.getWorld().dropItemNaturally(player.getLocation(),overflow);
         }
