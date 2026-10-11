@@ -119,6 +119,7 @@ final class VehicleRenderer {
                 v.linkedSeat=true;
                 v.driver=player.getUniqueId();
                 invokeOptional(v.display,"setTeleportDuration",int.class,mountedInterpolation());
+                chest.syncInterpolation(v,mountedInterpolation());
                 move(v,d);
                 return true;
             }
@@ -144,6 +145,7 @@ final class VehicleRenderer {
             v.seat=stand;v.linkedSeat=linked;
             v.driver=player.getUniqueId();
             invokeOptional(v.display,"setTeleportDuration",int.class,mountedInterpolation());
+            chest.syncInterpolation(v,mountedInterpolation());
             move(v,d);
             if(!linked)plugin.getLogger().warning("Vehicle "+v.id+
                     " is using independent fallback seating (display passengers unavailable).");
@@ -175,6 +177,7 @@ final class VehicleRenderer {
         v.stop();
         if(definition!=null&&v.display!=null&&v.display.isValid()){
             invokeOptional(v.display,"setTeleportDuration",int.class,interpolation());
+            chest.syncInterpolation(v,interpolation());
             move(v,definition);
         }
     }
