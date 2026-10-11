@@ -35,7 +35,16 @@ final class VehicleStore {
                 double x=section.getDouble(key+".x"),y=section.getDouble(key+".y"),z=section.getDouble(key+".z");
                 float yaw=(float)section.getDouble(key+".yaw");
                 if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(z))throw new IllegalArgumentException("Non-finite location");
-                vehicles.put(id,new VehicleInstance(id,type,owner,new Location(world,x,y,z,yaw,0)));
+                Integer color=null;
+                Object savedColor=section.get(key+".color");
+                if(savedColor!=null){
+                    if(!(savedColor instanceof Number))throw new IllegalArgumentException("Invalid RGB color value");
+                    int rgb=((Number)savedColor).intValue();
+                    if(rgb<0||rgb>0xFFFFFF||((Number)savedColor).doubleValue()!=rgb)
+                        throw new IllegalArgumentException("RGB color must be an integer between 0 and 16777215");
+                    color=Integer.valueOf(rgb);
+                }
+                vehicles.put(id,new VehicleInstance(id,type,owner,new Location(world,x,y,z,yaw,0),color));
             }catch(Exception error){
                 Bukkit.getLogger().warning("[VoxelVehicles] Skipping invalid saved vehicle "+key+": "+error.getMessage());
             }
@@ -44,11 +53,12 @@ final class VehicleStore {
 
     void save(Map<UUID,VehicleInstance> vehicles) throws IOException{
         YamlConfiguration config=new YamlConfiguration();
-        config.set("format",1);
+        config.set("format",2);
         for(VehicleInstance v:vehicles.values()){
             String k="vehicles."+v.id+".";
             config.set(k+"type",v.type.toString());
             config.set(k+"owner",v.owner.toString());
+            if(v.dyeColor!=null)config.set(k+"color",v.dyeColor);
             config.set(k+"world",v.location.getWorld().getName());
             config.set(k+"x",v.location.getX());config.set(k+"y",v.location.getY());
             config.set(k+"z",v.location.getZ());config.set(k+"yaw",v.location.getYaw());
