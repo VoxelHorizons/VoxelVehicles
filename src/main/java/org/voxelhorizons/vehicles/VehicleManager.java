@@ -22,6 +22,8 @@ public final class VehicleManager {
     private final VehicleRenderer renderer;
     private final Map<UUID,VehicleInstance> instances=new LinkedHashMap<UUID,VehicleInstance>();
     private final Map<UUID,UUID> entityIndex=new HashMap<UUID,UUID>();
+    // Dedicated hot path: never scan unloaded or parked instances each server tick.
+    private final Map<UUID,VehicleInstance> occupied=new LinkedHashMap<UUID,VehicleInstance>();
     private Map<ContentID,VehicleDefinition> definitions=Collections.emptyMap();
     private long revision=-1;
     private long ticks;
@@ -77,6 +79,7 @@ public final class VehicleManager {
 
     public boolean remove(VehicleInstance v){
         if(instances.remove(v.id)==null)return false;
+        occupied.remove(v.id);
         deindex(v);renderer.deactivate(v);save();return true;
     }
     public boolean mount(VehicleInstance v,Player p){
@@ -85,6 +88,7 @@ public final class VehicleManager {
         if(!d.publicAccess&&!v.owner.equals(p.getUniqueId())&&!p.hasPermission("voxelvehicles.admin"))return false;
         if(!renderer.seat(v,d,p))return false;
         index(v);
+        occupied.put(v.id,v);
         return true;
     }
     public void input(Player p,VehiclePhysics.Input input){
@@ -97,6 +101,7 @@ public final class VehicleManager {
         Entity seat=p.getVehicle();
         VehicleInstance v=seat==null?null:byEntity(seat).orElse(null);
         if(v==null)return;
+        occupied.remove(v.id);
         deindex(v);
         renderer.unseat(v);
         index(v);
@@ -115,6 +120,7 @@ public final class VehicleManager {
     }
     void unloadChunk(Chunk chunk){
         for(VehicleInstance v:instances.values())if(v.active()&&inChunk(v.location,chunk)){
+            occupied.remove(v.id);
             deindex(v);renderer.deactivate(v);
         }
         save();
@@ -146,17 +152,19 @@ public final class VehicleManager {
                 revision=core.getContentRuntime().current().revision();
             }
         }
-        for(VehicleInstance v:instances.values()){
-            if(!v.active())continue;
+        for(Iterator<VehicleInstance> iter=occupied.values().iterator();iter.hasNext();){
+            VehicleInstance v=iter.next();
+            if(!v.active()||v.driver==null){iter.remove();continue;}
             if(v.seat!=null&&v.driver!=null) {
                 Player p=Bukkit.getPlayer(v.driver);
                 if(p==null||!v.seat.isValid()||!v.seat.equals(p.getVehicle())){
                     deindex(v);renderer.unseat(v);index(v);
+                    iter.remove();
+                    continue;
                 }
             }
-            if(v.driver==null)continue; // parked vehicles consume no physics work
             VehicleDefinition d=definitions.get(v.type);
-            if(d==null){deindex(v);renderer.unseat(v);index(v);continue;}
+            if(d==null){deindex(v);renderer.unseat(v);index(v);iter.remove();continue;}
             VehiclePhysics.advance(v.motion,d,v.input);
             double dx=VehiclePhysics.dx(v.motion.yaw)*v.motion.speed;
             double dz=VehiclePhysics.dz(v.motion.yaw)*v.motion.speed;
@@ -187,6 +195,6 @@ public final class VehicleManager {
     void shutdown(){
         save();
         for(VehicleInstance v:instances.values())renderer.deactivate(v);
-        entityIndex.clear();
+        occupied.clear();entityIndex.clear();
     }
 }
