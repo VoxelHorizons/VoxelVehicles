@@ -13,6 +13,9 @@ public final class VehicleInstance {
     public Location location;
     public Entity display,hitbox,seat;
     public UUID driver;
+    /** True if the armor-stand seat rides the display as one movement root. */
+    public boolean linkedSeat;
+    public double passengerOffsetY;
     public VehiclePhysics.Input input=VehiclePhysics.Input.NEUTRAL;
     public VehicleInstance(UUID id,ContentID type,UUID owner,Location location) {
         this.id=id;this.owner=owner;this.type=type;this.location=location.clone();
