@@ -67,29 +67,31 @@ final class VehicleInventories implements Listener {
                 return false;
             }
         }
-        int rows=plugin.getConfig().getInt("inventory.rows",3);
+        // A vehicle selects storage rows (0=no storage); the configured GUI
+        // has a minimum height to preserve the authored model preview panel.
+        int minimumRows=plugin.getConfig().getInt("inventory.rows",3);
+        int rows=Math.max(minimumRows,definition.inventory.rows);
         int size=rows*9;
         int preview=plugin.getConfig().getInt("inventory.preview-slot",11);
-        if(rows<1||rows>6||preview<0||preview>=size){
+        if(minimumRows<1||minimumRows>6||preview<0||preview>=size){
             player.sendMessage("§cInvalid vehicle GUI dimensions or preview slot.");return false;
         }
-        List<Integer> configured=plugin.getConfig().getIntegerList("inventory.storage-slots");
-        Set<Integer> unique=new HashSet<Integer>();
-        for(int slot:configured){
-            if(slot<0||slot>=size||slot==preview||!unique.add(slot)){
-                player.sendMessage("§cInvalid vehicle GUI storage slot mapping.");return false;
-            }
-        }
-        if(definition.inventory.storageSize>configured.size()){
-            player.sendMessage("§cVehicle inventory.storage_size exceeds available storage slots.");
+        List<Integer> cargo;
+        try{
+            cargo=storageSlots(plugin.getConfig().getIntegerList("inventory.storage-slots"),
+                    definition.inventory.rows,preview,size);
+        }catch(IllegalArgumentException error){
+            player.sendMessage("§cInvalid vehicle storage layout: "+error.getMessage());
             return false;
         }
-        List<Integer> cargo=new ArrayList<Integer>(
-                configured.subList(0,definition.inventory.storageSize));
-        String raw=definition.inventory.storageSize==0
+        if(definition.inventory.rows>0&&cargo.isEmpty()){
+            player.sendMessage("§cVehicle storage rows have no assigned slots.");
+            return false;
+        }
+        String raw=definition.inventory.rows==0
                 ?definition.inventory.title:definition.inventory.storageTitle;
         if(raw==null)raw=plugin.getConfig().getString(
-                definition.inventory.storageSize==0
+                definition.inventory.rows==0
                         ?"inventory.titles.without-storage":"inventory.titles.with-storage","Vehicle");
         String title=resolveTitle(player,raw);
         VehicleInventoryHolder holder=new VehicleInventoryHolder(vehicle.id);
@@ -111,6 +113,29 @@ final class VehicleInventories implements Listener {
         open.put(vehicle.id,new Session(vehicle,player,inv,cargo));
         player.openInventory(inv);
         return true;
+    }
+
+    /**
+     * Keep the existing five slots per row exactly as configured. Every
+     * configured slot within the first N rows becomes cargo; there is no
+     * separate slot-count setting to keep synchronized with the artwork.
+     */
+    static List<Integer> storageSlots(List<Integer> configured,int storageRows,
+            int preview,int visibleSize){
+        if(storageRows<0||storageRows>6)throw new IllegalArgumentException("rows must be 0..6");
+        Set<Integer> seen=new HashSet<Integer>();
+        List<Integer> active=new ArrayList<Integer>();
+        for(int slot:configured){
+            // Allow slots in later rows even when the current vehicle uses
+            // only the original 3-row preview overlay.
+            if(slot<0||slot>=54||slot==preview||!seen.add(slot))
+                throw new IllegalArgumentException("invalid or duplicate slot "+slot);
+            if(slot/9<storageRows){
+                if(slot>=visibleSize)throw new IllegalArgumentException("slot "+slot+" is outside the menu");
+                active.add(slot);
+            }
+        }
+        return active;
     }
 
     private String resolveTitle(Player player,String source){
