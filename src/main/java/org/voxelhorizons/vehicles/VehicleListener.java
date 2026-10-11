@@ -59,8 +59,14 @@ final class VehicleListener implements Listener {
         VehicleInstance v=vehicles.byEntity(event.getRightClicked()).orElse(null);
         if(v==null)return;
         Player player=event.getPlayer();
-        // Crouching with a block should remain available for normal placement.
-        if(player.isSneaking()&&player.getInventory().getItemInMainHand().getType().isBlock())return;
+        // Sneak + non-block right-click opens the GUI instead of mounting.
+        // Keep the existing sneak-with-block building behavior.
+        if(player.isSneaking()){
+            if(player.getInventory().getItemInMainHand().getType().isBlock())return;
+            event.setCancelled(true);
+            if(vehicles.inventories()!=null)vehicles.inventories().open(player,v);
+            return;
+        }
         event.setCancelled(true);
         if(!vehicles.mount(v,player))player.sendMessage("§cThis vehicle is already occupied or access is denied.");
     }
@@ -98,7 +104,10 @@ final class VehicleListener implements Listener {
         if(!v.owner.equals(player.getUniqueId())
                 &&!player.hasPermission("voxelvehicles.admin"))return;
         VehicleDefinition d=vehicles.definition(v.type).orElse(null);
-        if(!vehicles.remove(v))return;
+        if(!vehicles.remove(v)){
+            player.sendMessage("§cEmpty the vehicle storage before picking it up.");
+            return;
+        }
         if(d!=null){
             // Drop back into the world so creative and survival players can both
             // reclaim a vehicle without losing its normal VoxelCore item identity.
