@@ -153,3 +153,39 @@ accidentally be disabled or configured with excessive latency. Use 1 for the tig
 player/model alignment; 2 or 3 can be tested if an unusually high packet-latency
 connection still visibly snaps. Parked vehicle interpolation is unchanged.
 A live VoxelCore reload reapplies the correct mounted/parked interpolation.
+
+
+## Vehicle terrain physics and suspension
+
+Ground vehicles now check **actual Bukkit block collision shapes** on modern servers, rather than treating slabs and stairs as full cubes. The movement solver:
+- Drives onto lower/upper slabs and stairs using their physical collision surfaces.
+- Climbs at most **one full block per step**; a two-block-high wall always blocks the vehicle.
+- Drops onto lower terrain using existing grounded movement and gravity logic.
+- Never queries unloaded chunks (does not trigger chunk loads).
+- Shares a short-lived block-shape cache between collision, stepping and four-wheel visual terrain sampling for each active driver.
+
+Only the model pitches/rolls using the sampled elevation under its front/rear and left/right wheels. The collision box, steering direction, and rider's seat stay upright so the camera doesn't tilt with the model. Visual tilt uses independent 2-tick metadata interpolation by default; mounted teleport interpolation remains 1 tick.
+
+Recommended tractor configuration (under `properties.vehicle`):
+
+```yaml
+physics:
+  speed: 0.28
+  reverse: 0.12
+  acceleration: 0.015
+  braking: 0.04
+  drag: 0.90
+  turn_rate: 3.0
+  step_height: 1.0   # 1.0 = full blocks; 0.5 = slabs only
+
+suspension:
+  wheelbase: 2.4      # Distance between front/rear probe points (blocks)
+  track_width: 1.4   # Distance between left/right probe points (blocks)
+  max_pitch: 20.0    # Degrees to visually lift/dip the nose
+  max_roll: 12.0     # Degrees to visually lean sideways
+  smoothing: 0.24    # 0.01..1; larger = faster tilt response
+```
+
+If your tractor currently uses `step_height: 0.6`, increase it to `1.0` to climb full blocks. The physics parser rejects values over 1.0. Other vehicle types can keep their old settings. `render.tilt-interpolation-ticks` in `plugins/VoxelVehicles/config.yml` defaults to 2.
+
+Modern collision shapes are available on Paper 1.19.4+; the older reflective fallback uses full solid cubes and therefore cannot represent precise stairs/slabs. Test against Paper 26.2 first. Visual slope animation is cosmetic, not a four-wheel rigid-body solver, and the current collision footprint remains axis-aligned even while the model tilts.
