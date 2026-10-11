@@ -20,6 +20,10 @@ maintenance:
 # Chest GUI: title glyphs are resolved by VoxelCore at open time.
 # These are defaults only: change them to any authored VoxelCore font aliases.
 inventory:
+  # Press F (swap hands) while riding to open this vehicle's menu.
+  # E opens the personal inventory client-side on ItemDisplay mounts and
+  # cannot be intercepted by Bukkit without changing the client entity type.
+  open-with-swap-hand: true
   # Minimum chest GUI height to fit the model preview panel. Individual
   # vehicles choose storage row count with properties.vehicle.inventory.rows.
   rows: 3
