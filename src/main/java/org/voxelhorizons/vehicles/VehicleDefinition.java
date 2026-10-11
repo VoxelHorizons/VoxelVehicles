@@ -21,6 +21,7 @@ public final class VehicleDefinition {
     public final double speed, reverse, acceleration, braking, drag, turnRate, stepHeight, flySpeed, climbSpeed;
     public final float viewDistance;
     public final double wheelbase, trackWidth, maxPitch, maxRoll, tiltSmoothing;
+    public final double gravity,terminalVelocity,airDrag,airbornePitchFactor;
 
     private VehicleDefinition(ContentID id, ContentID model, ContentID drop, Type type, boolean publicAccess,
             double width, double height, double hitboxX, double hitboxY, double hitboxZ,
@@ -29,7 +30,8 @@ public final class VehicleDefinition {
             double offsetX, double offsetY, double offsetZ, double offsetRotation, double speed, double reverse,
             double acceleration, double braking, double drag, double turnRate, double stepHeight,
             double flySpeed, double climbSpeed, float viewDistance,
-            double wheelbase,double trackWidth,double maxPitch,double maxRoll,double tiltSmoothing) {
+            double wheelbase,double trackWidth,double maxPitch,double maxRoll,double tiltSmoothing,
+            double gravity,double terminalVelocity,double airDrag,double airbornePitchFactor) {
         this.id=id; this.model=model; this.drop=drop; this.type=type; this.publicAccess=publicAccess;
         this.width=width; this.height=height; this.hitboxX=hitboxX; this.hitboxY=hitboxY; this.hitboxZ=hitboxZ;
         this.collisionWidth=collisionWidth;this.collisionHeight=collisionHeight;
@@ -41,6 +43,8 @@ public final class VehicleDefinition {
         this.flySpeed=flySpeed; this.climbSpeed=climbSpeed; this.viewDistance=viewDistance;
         this.wheelbase=wheelbase;this.trackWidth=trackWidth;this.maxPitch=maxPitch;
         this.maxRoll=maxRoll;this.tiltSmoothing=tiltSmoothing;
+        this.gravity=gravity;this.terminalVelocity=terminalVelocity;
+        this.airDrag=airDrag;this.airbornePitchFactor=airbornePitchFactor;
     }
     public static Optional<VehicleDefinition> parse(ItemDefinition item) {
         Object raw = item.properties().get("vehicle");
@@ -63,9 +67,9 @@ public final class VehicleDefinition {
         Map<?,?> seat=map(item,m.get("seat"),"seat");
         keys(item,seat,"seat","x","y","z");
         Map<?,?> suspension=map(item,m.get("suspension"),"suspension");
-        keys(item,suspension,"suspension","wheelbase","track_width","max_pitch","max_roll","smoothing");
+        keys(item,suspension,"suspension","wheelbase","track_width","max_pitch","max_roll","smoothing","airborne_pitch_factor");
         Map<?,?> p=map(item,m.get("physics"),"physics");
-        keys(item,p,"physics","speed","reverse","acceleration","braking","drag","turn_rate","step_height","fly_speed","climb_speed");
+        keys(item,p,"physics","speed","reverse","acceleration","braking","drag","turn_rate","step_height","fly_speed","climb_speed","gravity","terminal_velocity","air_drag");
         if (m.containsKey("public") && !(m.get("public") instanceof Boolean)) throw bad(item,"public must be boolean");
         return Optional.of(new VehicleDefinition(item.id(),ref(item,m.get("model_item")),ref(item,m.get("drop")),
                 type,Boolean.TRUE.equals(m.get("public")),num(item,h,"width",1.4,0.1,16),
@@ -89,7 +93,11 @@ public final class VehicleDefinition {
                 num(item,suspension,"track_width",1.2,0.25,8.0),
                 num(item,suspension,"max_pitch",20,0,45),
                 num(item,suspension,"max_roll",12,0,45),
-                num(item,suspension,"smoothing",0.24,0.01,1.0)));
+                num(item,suspension,"smoothing",0.24,0.01,1.0),
+                num(item,p,"gravity",0.08,0.001,0.5),
+                num(item,p,"terminal_velocity",1.6,0.1,3.0),
+                num(item,p,"air_drag",0.99,0.8,1.0),
+                num(item,suspension,"airborne_pitch_factor",0.8,0,2)));
     }
     private static ContentID ref(ItemDefinition item,Object value) {
         if(value==null)return item.id();
