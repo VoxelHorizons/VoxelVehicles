@@ -534,15 +534,14 @@ listener cannot replace it with a server menu; a different client-visible
 mount type or client mod is needed for native E integration.
 
 
-## Optional donkey-style vehicle chest upgrades (PR #11)
+## Optional installable chest storage (PR #11)
 
-**Only explicitly opted-in vehicles** can accept a chest. Existing vehicles
-without `inventory.chest.enabled: true` retain their current always-available
-storage behavior and their existing YAML does not change.
+Only vehicles with `properties.vehicle.inventory.chest.enabled: true`
+accept chest upgrades. Existing vehicle definitions without this property
+preserve their normal always-available storage.
 
-To give the tractor an installable chest on the rear, add this inside
-`items.tractor.properties.vehicle.inventory` along with the existing preview,
-title, filler, and storage slot settings:
+Add the following under the tractor's existing
+`items.tractor.properties.vehicle.inventory` settings:
 
 ```yaml
 inventory:
@@ -559,11 +558,10 @@ inventory:
 
   chest:
     enabled: true
-    item: CHEST             # Configurable vanilla Minecraft material
-    slot: 0                 # Button in vehicle GUI, NOT a cargo slot
+    item: CHEST               # Vanilla item required to install storage
     visual:
-      mode: ITEM_DISPLAY    # NONE | ITEM_DISPLAY | MODEL_SWAP
-      # item: voxel:tractor_chest   # Optional custom VoxelCore model item
+      mode: ITEM_DISPLAY      # NONE | ITEM_DISPLAY | MODEL_SWAP
+      # item: voxel:tractor_chest  # Optional VoxelCore model for the chest
       offset: {x: 0.0, y: 1.0, z: -1.5}
       scale: 0.8
       yaw: 0.0
@@ -573,71 +571,57 @@ inventory:
       interaction_height: 0.8
 ```
 
-**Coordinates are illustrative.** The chest visual offset is in blocks
-relative to the authored vehicle model origin, not multiplied by the tractor
-`scale`. +Z is forward; -Z is behind the vehicle. Adjust `x/y/z`
-to position the chest over the rear of your actual Blockbench tractor.
-`scale` sizes only the chest item display, not the tractor or the
-player seat. `follow_tilt` carries it with cosmetic suspension.
+### Vehicle interaction controls
 
-### Installation, interaction, and removal
+| Interaction | Action |
+| --- | --- |
+| Normal right-click the tractor (even holding CHEST) | Mount, as usual |
+| Shift + right-click while holding CHEST (only compatible vehicles) | Attach one chest; enable storage |
+| Shift + right-click with any other item or an empty hand | Open the existing vehicle inventory |
+| Shift + right-click with CHEST when chest is already installed | Open inventory; do not consume another chest |
+| Click attached chest accessory with right-click | Open the vehicle inventory |
+| Left-click attached chest accessory without crouching | Detach chest, only when completely empty |
+| `/vv chest remove` (within six blocks or mounted) | Remove empty chest when no accessory exists or is difficult to target |
+| F while mounted | Open vehicle inventory (default existing shortcut) |
 
-- Right-click an opted-in vehicle with a `CHEST` item in your main hand to
-  install one. Exactly one is consumed; its original item metadata is
-  persisted and returned on removal, including across restarts.
-- Or open the vehicle GUI by shift-right-clicking its main body or using
-  `/vv inventory`. Put a chest on your cursor and click the configurable
-  chest button (`slot: 0`) to install. Without a chest installed the normal
-  non-storage overlay/preview is shown and cargo slots are locked/filled.
-- When installed, the **storage overlay** is used and existing cargo slots
-  open. The optional attached chest appears and moves/rotates with the
-  vehicle. Clicking its separate Interaction hitbox opens the inventory.
-- Click the chest button with the cursor empty, or **sneak-right-click the
-  attached chest itself** to detach it. Only the owner or an admin may make
-  changes. The **entire cargo must be empty** before removal; no items can
-  be silently deleted. If the player inventory is full, the returned chest
-  item is dropped at the player.
-- A vehicle cannot be picked up while it contains items **or** an installed
-  chest. The chest must be removed first. Existing parked vehicle interactions,
-  driver controls and rendering remain intact.
+**The vehicle GUI contains no chest installation button, reserved chest slot,
+or equipment cell.** All non-cargo slots continue to use the existing
+invisible filler. The command is intended as a removal fallback, not
+required for normal use.
 
-An attached chest is persistent until removed; it is **not** merely shown
-while the GUI is open. This allows the vehicle's storage state to be
-identifiable in the world. A chest installed in the inventory immediately
-appears outside once the screen closes.
+Chest installs are restricted to the vehicle owner and admins, including
+for `public: true` vehicles. One item from the main-hand stack is consumed,
+and its full original ItemStack data is saved with the vehicle. Removal
+returns that same item to inventory, dropping it safely at the player if
+inventory is full.
 
-### Alternative visual approaches
+Without the upgrade, the ordinary no-storage background/title is used
+and storage slots remain locked; after installing the chest the
+`storage_title` becomes active and the configured slots unlock.
+The upgrade persists through server restarts. Removal is denied if
+any stored cargo remains (including hidden cargo), and the tractor itself
+cannot be picked up until the chest is removed.
 
-To use the **vehicle's existing model with a different variant** while
-the chest is installed, configure:
+### Visual positioning and alternatives
 
-```yaml
-chest:
-  enabled: true
-  item: CHEST
-  slot: 0
-  visual:
-    mode: MODEL_SWAP
-    model_item: voxel:tractor_with_chest
-```
+Chest `visual.offset` is specified in blocks in the vehicle model's local
+coordinate space; **+Z is forward and -Z is behind**. The sample coordinates
+are a starting point only. The accessory can track vehicle yaw, movement
+and optional suspension tilt. A separate click Interaction is optional;
+it does not change the physical tractor collision body or rider position.
 
-Here `voxel:tractor_with_chest` must be an authored **VoxelCore item ID**,
-not a bare resource-pack JSON model path. It replaces the rendered tractor
-item while attached and restores the original model when removed. If the
-alternative item is dyeable, the tractor's placed color is preserved.
+Use `visual.mode: MODEL_SWAP` with
+`visual.model_item: voxel:tractor_with_chest` to replace the tractor model
+while installed, or `visual.mode: NONE` to enable chest storage without
+a world-space chest display. A model-swap item must exist as a registered
+VoxelCore content ID. `visual.item` in ITEM_DISPLAY mode likewise accepts
+a registered VoxelCore item, and defaults to displaying the vanilla chest.
+Set `visual.interaction: false` to render an accessory without its own
+clickbox.
 
-Use `visual.mode: NONE` if installing a chest should enable storage without
-adding a visual or replacing the tractor model. For
-`visual.mode: ITEM_DISPLAY`, omit `visual.item` for vanilla `CHEST`
-rendering or set a VoxelCore item ID for a custom designed chest.
-`visual.interaction: false` disables the extra chest hitbox while still
-showing the chest model.
+A legacy `chest.slot` setting from earlier development builds is ignored
+but accepted, to avoid breaking existing configurations. It no longer
+affects the inventory layout and can be removed.
 
-Optional button and visual changes are configured per vehicle and inherited
-by VoxelCore child items such as `tractor-yellow`.
-
-**Scope:** Chest upgrades do not add a new physics collision box, inventory
-capacity is still driven by `inventory.rows` and `storage-slots`, and the
-riding E-key client limitation remains (F or `/vv inventory` works).
-The current UI upgrade slot is a vanilla item button inside the custom chest
-screen; it is not a chest equipment slot implemented through horse packets.
+The original ItemDisplay mount still cannot intercept the vanilla E key.
+F and `/vv inventory` remain available.
