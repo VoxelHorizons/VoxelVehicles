@@ -15,9 +15,8 @@ public final class VehicleInstance {
     public Location location;
     public Entity display,hitbox,seat;
     public UUID driver;
-    /** True while the seat rides the ItemDisplay as one movement root. */
+    /** True when the rider (or compatibility seat) rides the ItemDisplay root. */
     public boolean linkedSeat;
-    public double passengerOffsetY;
     /** Cosmetic terrain suspension only; never rotates the physical hitbox or rider. */
     public double visualPitch,visualRoll;
     public VehiclePhysics.Input input=VehiclePhysics.Input.NEUTRAL;
