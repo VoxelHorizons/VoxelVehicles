@@ -43,8 +43,9 @@ final class VehicleCommand implements CommandExecutor,TabCompleter {
                 ContentID id=ContentID.parse(args[1],"voxel");
                 Location at=player.getLocation().clone();
                 at.setYaw(player.getLocation().getYaw());
-                sender.sendMessage(vehicles.spawn(id,player.getUniqueId(),at).isPresent()
-                        ?"§aVehicle spawned.":"§cUnknown vehicle or blocked location.");
+                VehicleManager.SpawnResult result=vehicles.trySpawn(id,player.getUniqueId(),at,null);
+                sender.sendMessage(result.successful()?
+                        "§aVehicle spawned.":"§cCannot spawn "+id+": "+result.failure);
             }catch(IllegalArgumentException e){sender.sendMessage("§c"+e.getMessage());}
             return true;
         }
