@@ -26,6 +26,7 @@ public final class VehicleManager {
     private final VehiclePerformance performance=new VehiclePerformance();
     private VehicleInventories inventories;
     private final Map<UUID,VehicleInstance> instances=new LinkedHashMap<UUID,VehicleInstance>();
+    private final VehicleChunkIndex chunkIndex=new VehicleChunkIndex();
     private final Map<UUID,UUID> entityIndex=new HashMap<UUID,UUID>();
     // Dedicated hot path: never scan unloaded or parked instances each server tick.
     private final Map<UUID,VehicleInstance> occupied=new LinkedHashMap<UUID,VehicleInstance>();
@@ -46,6 +47,7 @@ public final class VehicleManager {
     void start(){
         refreshDefinitions();
         store.load(instances);
+        for(VehicleInstance v:instances.values())indexChunk(v);
         for(World world:Bukkit.getWorlds())for(Chunk chunk:world.getLoadedChunks())loadChunk(chunk);
         plugin.getServer().getScheduler().runTaskTimer(plugin,new Runnable(){
             @Override public void run(){tick();}
@@ -161,6 +163,7 @@ public final class VehicleManager {
             VehicleInstance v=new VehicleInstance(UUID.randomUUID(),type,owner,where,dyeColor);
             activate(v,d);
             instances.put(v.id,v);
+            indexChunk(v);
             save();
             return SpawnResult.success(v);
         }catch(RuntimeException e){
@@ -179,6 +182,7 @@ public final class VehicleManager {
         // Prevent dropping a vehicle item while deleting its cargo.
         if(v.hasStoredItems()||v.chestInstalled())return false;
         if(instances.remove(v.id)==null)return false;
+        chunkIndex.remove(v.id);
         if(inventories!=null)inventories.closeFor(v);
         occupied.remove(v.id);
         deindex(v);renderer.deactivate(v);save();return true;
@@ -261,7 +265,9 @@ public final class VehicleManager {
     void loadChunk(Chunk chunk){
         // Clean only stale tagged entities; entityIndex protects our live entities.
         cleanupOrphans(chunk);
-        for(VehicleInstance v:instances.values())if(inChunk(v.location,chunk)){
+        for(UUID id:chunkIndex.inChunk(chunk.getWorld().getUID(),chunk.getX(),chunk.getZ())){
+            VehicleInstance v=instances.get(id);
+            if(v==null||!inChunk(v.location,chunk))continue;
             VehicleDefinition d=definitions.get(v.type);
             if(d==null)continue;
             if(v.display==null||!v.display.isValid()||v.hitbox==null||!v.hitbox.isValid()){
@@ -274,7 +280,9 @@ public final class VehicleManager {
         }
     }
     void unloadChunk(Chunk chunk){
-        for(VehicleInstance v:instances.values())if(v.active()&&inChunk(v.location,chunk)){
+        for(UUID id:chunkIndex.inChunk(chunk.getWorld().getUID(),chunk.getX(),chunk.getZ())){
+            VehicleInstance v=instances.get(id);
+            if(v==null||!v.active()||!inChunk(v.location,chunk))continue;
             occupied.remove(v.id);
             deindex(v);renderer.deactivate(v);
         }
@@ -311,8 +319,10 @@ public final class VehicleManager {
         Vector ray=eye.getDirection().normalize();
         VehicleInstance nearest=null;
         double best=reach;
-        for(VehicleInstance v:instances.values()){
-            if(!v.active()||v.driver!=null||!v.location.getWorld().equals(eye.getWorld()))continue;
+        for(UUID id:chunkIndex.nearby(eye.getWorld().getUID(),eye.getX(),eye.getZ(),reach)){
+            VehicleInstance v=instances.get(id);
+            if(v==null||!v.active()||v.driver!=null
+                    ||!v.location.getWorld().equals(eye.getWorld()))continue;
             VehicleDefinition d=definitions.get(v.type);
             if(d==null)continue;
             Location center=VehicleTransform.hitbox(v.location,d);
@@ -345,6 +355,12 @@ public final class VehicleManager {
         renderer.activate(v,d);
         index(v);
     }
+    private void indexChunk(VehicleInstance v){
+        if(v.location.getWorld()!=null)
+            chunkIndex.update(v.id,v.location.getWorld().getUID(),
+                    v.location.getX(),v.location.getZ());
+    }
+
     private void index(VehicleInstance v){
         VehicleDefinition definition=definitions.get(v.type);
         if(v.active()&&definition!=null&&!definition.particles.isEmpty())
@@ -442,6 +458,7 @@ public final class VehicleManager {
             next.setYaw(v.motion.yaw);
             if(!old.equals(next)){
                 v.location=next;
+                indexChunk(v);
                 dirty=true;
                 renderer.move(v,d);
                 if(v.driver==null){
@@ -478,6 +495,6 @@ public final class VehicleManager {
         if(inventories!=null)inventories.shutdown();
         save();
         for(VehicleInstance v:instances.values())renderer.deactivate(v);
-        occupied.clear();particleSources.clear();entityIndex.clear();
+        occupied.clear();particleSources.clear();entityIndex.clear();chunkIndex.clear();
     }
 }
