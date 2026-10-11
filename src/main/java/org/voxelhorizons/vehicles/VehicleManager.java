@@ -98,27 +98,57 @@ public final class VehicleManager {
         }
     }
 
-    public Optional<VehicleInstance> spawn(ContentID type,UUID owner,Location at){
-        return spawn(type,owner,at,null);
+    /** A success or an actionable placement failure; used by item clicks and admin commands. */
+    public static final class SpawnResult {
+        public final VehicleInstance vehicle;
+        public final String failure;
+        private SpawnResult(VehicleInstance vehicle,String failure){
+            this.vehicle=vehicle;this.failure=failure;
+        }
+        public boolean successful(){return vehicle!=null;}
+        public Optional<VehicleInstance> optional(){return Optional.ofNullable(vehicle);}
+        private static SpawnResult success(VehicleInstance v){return new SpawnResult(v,null);}
+        private static SpawnResult failure(String message){return new SpawnResult(null,message);}
     }
 
-    /** Copies VoxelCore's mutable per-stack color before consuming the source item. */
+    public Optional<VehicleInstance> spawn(ContentID type,UUID owner,Location at){
+        return trySpawn(type,owner,at,null).optional();
+    }
+
     public Optional<VehicleInstance> spawn(ContentID type,UUID owner,Location at,ItemStack source){
+        return trySpawn(type,owner,at,source).optional();
+    }
+
+    /** Captures mutable VoxelCore color and reports the exact reason a spawn fails. */
+    public SpawnResult trySpawn(ContentID type,UUID owner,Location at,ItemStack source){
         VehicleDefinition d=definitions.get(type);
-        if(d==null||at.getWorld()==null||!at.getWorld().isChunkLoaded(at.getBlockX()>>4,at.getBlockZ()>>4))
-            return Optional.empty();
+        if(d==null)return SpawnResult.failure("Unknown vehicle "+type
+                +". Check /vv list and verify /vc admin content reload succeeded.");
+        if(at==null||at.getWorld()==null)
+            return SpawnResult.failure("The placement position has no loaded world.");
+        if(!at.getWorld().isChunkLoaded(at.getBlockX()>>4,at.getBlockZ()>>4))
+            return SpawnResult.failure("The vehicle origin chunk is not loaded.");
         Location where=at.clone();where.setPitch(0);
-        if(!VehicleCollision.clear(where,d))return Optional.empty();
+        if(!VehicleCollision.clear(where,d))
+            return SpawnResult.failure(VehicleCollision.blockedReason(where,d));
         Integer dyeColor=null;
-        if(source!=null&&core.getItemManager().isDyeable(source))
-            dyeColor=core.getItemManager().getDyeColor(source).orElse(null);
-        VehicleInstance v=new VehicleInstance(UUID.randomUUID(),type,owner,where,dyeColor);
-        try{activate(v,d);}catch(RuntimeException e){
-            plugin.getLogger().warning("Vehicle spawn failed: "+e.getMessage());return Optional.empty();
+        try{
+            if(source!=null&&core.getItemManager().isDyeable(source))
+                dyeColor=core.getItemManager().getDyeColor(source).orElse(null);
+            VehicleInstance v=new VehicleInstance(UUID.randomUUID(),type,owner,where,dyeColor);
+            activate(v,d);
+            instances.put(v.id,v);
+            save();
+            return SpawnResult.success(v);
+        }catch(RuntimeException e){
+            Throwable cause=e;
+            while(cause.getCause()!=null&&cause.getCause()!=cause)cause=cause.getCause();
+            plugin.getLogger().log(java.util.logging.Level.WARNING,
+                    "Vehicle "+type+" could not spawn at "+where+"; cause: "+cause,e);
+            return SpawnResult.failure("Vehicle renderer failed: "+
+                    (cause.getMessage()==null?cause.getClass().getSimpleName():cause.getMessage())
+                    +". See server logs.");
         }
-        instances.put(v.id,v);
-        save();
-        return Optional.of(v);
     }
 
     public boolean remove(VehicleInstance v){
