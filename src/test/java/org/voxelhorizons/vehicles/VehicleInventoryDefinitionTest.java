@@ -14,21 +14,26 @@ public class VehicleInventoryDefinitionTest {
     @Test public void noStorageUsesBaseLayoutByDefault(){
         VehicleInventoryDefinition spec=VehicleInventoryDefinition.parse(tractor,null);
         assertTrue(spec.enabled);
-        assertEquals(0,spec.storageSize);
+        assertEquals(0,spec.rows);
         assertNull(spec.previewItem);
         assertNull(spec.title);
     }
     @Test public void overrideStorageAndPreviewWithoutHardcodedGlyphs(){
         Map<String,Object> values=new HashMap<String,Object>();
         values.put("enabled",true);
-        values.put("storage_size",15);
+        values.put("rows",3);
         values.put("preview_item","voxel:tractor_inventory_preview");
         values.put("storage_title",":my_own_inventory_glyph:");
         VehicleInventoryDefinition spec=parse(values);
         assertTrue(spec.enabled);
-        assertEquals(15,spec.storageSize);
+        assertEquals(3,spec.rows);
         assertEquals("voxel:tractor_inventory_preview",spec.previewItem.toString());
         assertEquals(":my_own_inventory_glyph:",spec.storageTitle);
+    }
+    @Test public void allSixRowsSupported(){
+        Map<String,Object> data=new HashMap<String,Object>();
+        data.put("rows",6);
+        assertEquals(6,parse(data).rows);
     }
     @Test public void disabledVehicleCannotOpen(){
         Map<String,Object> data=new HashMap<String,Object>();
@@ -38,7 +43,7 @@ public class VehicleInventoryDefinitionTest {
     @Test(expected=IllegalArgumentException.class)
     public void rejectsExcessStorage(){
         Map<String,Object> values=new HashMap<String,Object>();
-        values.put("storage_size",55);
+        values.put("rows",7);
         parse(values);
     }
     @Test(expected=IllegalArgumentException.class)
