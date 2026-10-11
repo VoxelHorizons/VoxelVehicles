@@ -5,6 +5,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Per-vehicle inventory capabilities. UI glyph titles and chest slot layout
@@ -19,21 +21,28 @@ final class VehicleInventoryDefinition {
     final Integer previewSlot;
     /** null means inherit globally; empty string disables fillers for this vehicle. */
     final String fillItem;
+    /** null means inherit the plugin-wide slot mapping. */
+    final List<Integer> storageSlots;
+    /** null means inherit the plugin-wide fill metadata setting. */
+    final Boolean copyFillPreviewMeta;
     final String title,storageTitle;
 
     private VehicleInventoryDefinition(boolean enabled,boolean storageEnabled,int rows,ContentID previewItem,
-            Integer previewSlot,String fillItem,String title,String storageTitle){
+            Integer previewSlot,String fillItem,List<Integer> storageSlots,Boolean copyFillPreviewMeta,
+            String title,String storageTitle){
         this.enabled=enabled;this.storageEnabled=storageEnabled;this.rows=rows;this.previewItem=previewItem;
         this.previewSlot=previewSlot;this.fillItem=fillItem;
+        this.storageSlots=storageSlots==null?null:Collections.unmodifiableList(new ArrayList<Integer>(storageSlots));
+        this.copyFillPreviewMeta=copyFillPreviewMeta;
         this.title=title;this.storageTitle=storageTitle;
     }
 
     static VehicleInventoryDefinition parse(ContentID id,Object raw){
-        if(raw==null)return new VehicleInventoryDefinition(true,false,0,null,null,null,null,null);
+        if(raw==null)return new VehicleInventoryDefinition(true,false,0,null,null,null,null,null,null,null);
         if(!(raw instanceof Map))throw bad(id,"inventory must be a mapping");
         Map<?,?> data=(Map<?,?>)raw;
         Set<String> keys=new HashSet<String>();
-        Collections.addAll(keys,"enabled","storage_enabled","rows","preview_item","preview-slot","fill-item","title","storage_title");
+        Collections.addAll(keys,"enabled","storage_enabled","rows","preview_item","preview-slot","fill-item","storage-slots","fill-copy-preview-meta","title","storage_title");
         for(Object key:data.keySet())
             if(!keys.contains(key))throw bad(id,"unknown inventory property "+key);
         Object enabled=data.get("enabled");
@@ -68,11 +77,36 @@ final class VehicleInventoryDefinition {
             previewSlot=Integer.valueOf(((Number)slot).intValue());
         }
         String fillItem=title(id,data.get("fill-item"),"fill-item");
+        Boolean copyFillPreviewMeta=null;
+        if(data.containsKey("fill-copy-preview-meta")){
+            Object copy=data.get("fill-copy-preview-meta");
+            if(!(copy instanceof Boolean))
+                throw bad(id,"inventory.fill-copy-preview-meta must be a boolean");
+            copyFillPreviewMeta=(Boolean)copy;
+        }
+        List<Integer> customSlots=null;
+        if(data.containsKey("storage-slots")){
+            Object configured=data.get("storage-slots");
+            if(!(configured instanceof List))throw bad(id,"inventory.storage-slots must be a list");
+            List<?> input=(List<?>)configured;
+            customSlots=new ArrayList<Integer>(input.size());
+            Set<Integer> unique=new HashSet<Integer>();
+            for(Object rawSlot:input){
+                if(!(rawSlot instanceof Number)
+                        ||!Double.isFinite(((Number)rawSlot).doubleValue())
+                        ||((Number)rawSlot).doubleValue()!=Math.rint(((Number)rawSlot).doubleValue())
+                        ||((Number)rawSlot).intValue()<0||((Number)rawSlot).intValue()>53)
+                    throw bad(id,"inventory.storage-slots must contain only integer slots 0..53");
+                int index=((Number)rawSlot).intValue();
+                if(!unique.add(index))throw bad(id,"inventory.storage-slots contains duplicate slot "+index);
+                customSlots.add(index);
+            }
+        }
         String title=title(id,data.get("title"),"title");
         String withStorage=title(id,data.get("storage_title"),"storage_title");
         return new VehicleInventoryDefinition(!Boolean.FALSE.equals(enabled),
                 !Boolean.FALSE.equals(storageEnabled)&&storageRows>0,
-                storageRows,preview,previewSlot,fillItem,title,withStorage);
+                storageRows,preview,previewSlot,fillItem,customSlots,copyFillPreviewMeta,title,withStorage);
     }
     int effectiveStorageRows(){return storageEnabled?rows:0;}
 
