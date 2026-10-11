@@ -133,3 +133,23 @@ While occupied, the invisible driver seat rides the visible ItemDisplay, and the
 **Left-click / punch** an unoccupied owned vehicle to pick it up as a dropped VoxelCore item; admins with `voxelvehicles.admin` can also pick it up. An arm-swing ray test works even where the Interaction entity does not fire Bukkit damage events. `/vv remove` deletes a nearby instance without an item drop.
 
 **Live reload:** after `/vc admin content reload`, the plugin sees the updated VoxelCore revision and refreshes loaded vehicles' models, scale, offsets and hitboxes automatically on the next tick; unloaded vehicles refresh when their chunk loads. `/vv sync` triggers a refresh manually and `/vv cleanup` removes stale tagged vehicle entities in already loaded chunks. A periodic repair/orphan sweep runs every `maintenance.cleanup-ticks` (default 600).
+
+
+### Mounted display smoothing
+
+Mounted vehicles use the ItemDisplay as the movement root for the passenger chain. The
+ItemDisplay must interpolate teleports over at least one tick, otherwise its visual
+model snaps each tick while the player riding it is smoothly interpolated by the client.
+The old renderer incorrectly set `setTeleportDuration(0)` on mount.
+
+```yaml
+render:
+  interpolation-ticks: 1
+  mounted-interpolation-ticks: 1
+```
+
+The mounted duration defaults to one tick, and is constrained to 1-3 ticks so it cannot
+accidentally be disabled or configured with excessive latency. Use 1 for the tightest
+player/model alignment; 2 or 3 can be tested if an unusually high packet-latency
+connection still visibly snaps. Parked vehicle interpolation is unchanged.
+A live VoxelCore reload reapplies the correct mounted/parked interpolation.

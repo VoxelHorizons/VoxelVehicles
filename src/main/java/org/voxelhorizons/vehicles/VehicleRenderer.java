@@ -53,6 +53,10 @@ final class VehicleRenderer {
         invoke(vehicle.display,"setItemStack",ItemStack.class,item);
         applyFixedTransform(vehicle.display);
         invokeOptional(vehicle.display,"setViewRange",float.class,definition.viewDistance/64.0f);
+        // Always restore the appropriate interpolation after a VoxelCore content reload.
+        // The player and model must be interpolated on the same tick cadence.
+        invokeOptional(vehicle.display,"setTeleportDuration",int.class,
+                vehicle.linkedSeat?mountedInterpolation():interpolation());
         invoke(vehicle.hitbox,"setInteractionWidth",float.class,(float)definition.width);
         invoke(vehicle.hitbox,"setInteractionHeight",float.class,(float)definition.height);
         invokeOptional(vehicle.hitbox,"setResponsive",boolean.class,true);
@@ -108,7 +112,11 @@ final class VehicleRenderer {
                     ?stand.getLocation().getY()-vehicle.display.getLocation().getY():0;
             vehicle.seat=stand;
             vehicle.driver=player.getUniqueId();
-            invokeOptional(vehicle.display,"setTeleportDuration",int.class,0);
+            // Never force 0-tick teleports for an occupied ItemDisplay.
+            // The rider is smoothly interpolated by the client, and a snapping
+            // model root will visibly oscillate relative to that player.
+            invokeOptional(vehicle.display,"setTeleportDuration",int.class,
+                    linked?mountedInterpolation():interpolation());
             applyMatrix(vehicle.display,definition,linked,vehicle.passengerOffsetY);
             move(vehicle,definition);
             if(!linked)plugin.getLogger().warning("Display passenger link not supported; vehicle "
@@ -155,6 +163,20 @@ final class VehicleRenderer {
 
     private int interpolation(){
         return Math.max(0,Math.min(59,plugin.getConfig().getInt("render.interpolation-ticks",1)));
+    }
+
+    /**
+     * The mounted display is a movement root for a client-interpolated player.
+     * A teleport duration of zero creates visible model snap/jitter relative
+     * to the seat. Limit the setting to 1-3 ticks to avoid obvious model drag.
+     */
+    private int mountedInterpolation(){
+        return clampMountedInterpolation(plugin.getConfig()
+                .getInt("render.mounted-interpolation-ticks",1));
+    }
+
+    static int clampMountedInterpolation(int ticks){
+        return Math.max(1,Math.min(3,ticks));
     }
 
     private void tag(Entity e,UUID id){
