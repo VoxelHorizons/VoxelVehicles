@@ -42,38 +42,47 @@ inventory:
   # reference; the latter resolves to its uniquely matching VoxelCore item.
   # Set to "" to leave decorative slots empty (still protected).
   fill-item: "voxel:ui/blank"
+  # Give invisible fillers the same hover display name/lore as the preview.
+  # They retain their original transparent model and never become cargo.
+  fill-copy-preview-meta: true
 
-  # Five storage slots per row, retaining the original 3x5 layout.
-  # Vehicles choose inventory.rows: 0-6. Only slots belonging to their
-  # selected storage rows unlock; row 0 means a preview-only interface.
+  # Six cargo slots per row for the updated resource-pack overlay.
+  # This can be overridden by each vehicle's properties.vehicle.inventory
+  # storage-slots setting; old config.yml files must be updated manually.
   # Rows 4-6 require extended resource-pack background overlays.
   storage-slots:
+    - 3
     - 4
     - 5
     - 6
     - 7
     - 8
+    - 12
     - 13
     - 14
     - 15
     - 16
     - 17
+    - 21
     - 22
     - 23
     - 24
     - 25
     - 26
-    # Optional rows 4, 5 and 6 (existing first three rows unchanged).
+    # Optional fourth through sixth rows:
+    - 30
     - 31
     - 32
     - 33
     - 34
     - 35
+    - 39
     - 40
     - 41
     - 42
     - 43
     - 44
+    - 48
     - 49
     - 50
     - 51
