@@ -610,6 +610,18 @@ are a starting point only. The accessory can track vehicle yaw, movement
 and optional suspension tilt. A separate click Interaction is optional;
 it does not change the physical tractor collision body or rider position.
 
+**Accessory alignment (PR #11 follow-up):** The chest and tractor ItemDisplays
+now share the exact same world anchor at the tractor's permanent seat root
+on every movement tick. Both interpolate over the same teleport interval,
+including when a player mounts/dismounts. The chest gets its offsets, tilt,
+local yaw and scale entirely from a transform matrix; it does **not** orbit
+the tractor through separately rotated world-space teleports when steering.
+The chest's independent Interaction hitbox still follows its calculated
+world-space location, so players can click on the actual accessory. The
+`visual.offset` settings do not need to change when upgrading the JAR;
+reposition them only if the chest needs to sit elsewhere on your model.
+
+
 Use `visual.mode: MODEL_SWAP` with
 `visual.model_item: voxel:tractor_with_chest` to replace the tractor model
 while installed, or `visual.mode: NONE` to enable chest storage without
