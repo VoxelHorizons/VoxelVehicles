@@ -15,16 +15,15 @@ final class VehicleCollision {
         double x=where.getX()+d.hitboxX*cos-d.hitboxZ*sin;
         double y=where.getY()+d.hitboxY;
         double z=where.getZ()+d.hitboxX*sin+d.hitboxZ*cos;
-        double[] xs={x-half,x+half};
-        double[] zs={z-half,z+half};
-        double[] ys={y+0.05,y+d.height*0.5,y+d.height-0.05};
-        for(double px:xs)for(double pz:zs) {
-            int cx=((int)Math.floor(px))>>4,cz=((int)Math.floor(pz))>>4;
-            if(!world.isChunkLoaded(cx,cz))return false;
-            for(double py:ys) {
-                if(py<0||py>=world.getMaxHeight())return false;
-                if(world.getBlockAt((int)Math.floor(px),(int)Math.floor(py),(int)Math.floor(pz)).getType().isSolid())
-                    return false;
+        int minX=(int)Math.floor(x-half+0.001),maxX=(int)Math.floor(x+half-0.001);
+        int minZ=(int)Math.floor(z-half+0.001),maxZ=(int)Math.floor(z+half-0.001);
+        int minY=(int)Math.floor(y+0.01),maxY=(int)Math.floor(y+d.height-0.01);
+        if(minY<0||maxY>=world.getMaxHeight())return false;
+        for(int px=minX;px<=maxX;px++)for(int pz=minZ;pz<=maxZ;pz++){
+            // Check before querying blocks: getBlockAt() must not force a chunk load.
+            if(!world.isChunkLoaded(px>>4,pz>>4))return false;
+            for(int py=minY;py<=maxY;py++){
+                if(world.getBlockAt(px,py,pz).getType().isSolid())return false;
             }
         }
         return true;
