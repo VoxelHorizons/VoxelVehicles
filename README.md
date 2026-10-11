@@ -349,7 +349,7 @@ the screen. All configured title offsets and glyphs are therefore hot-reloadable
 with `/vc admin content reload` and adjustable without rebuilding the plugin.
 
 The supplied mock-up uses 27 slots. The dark 3x3 preview window is left (columns 2–4),
-the right-hand 15 cargo slots are configurable, and the actual single preview
+the right-hand cargo slots are configurable, and the actual single preview
 item is rendered at configurable slot 10 (one column to the left in the
 updated artwork), locked from clicks and drags. All GUI positions
 and title templates are editable in VoxelVehicles `config.yml`.
@@ -404,10 +404,12 @@ to players by default. Storage and
 preview item can be configured independently per vehicle. The UI shows
 the no-storage title if `inventory.rows: 0`, and the storage variant when
 `inventory.rows` is 1–6. The visible cargo slots are determined directly
-from the `storage-slots` list in VoxelVehicles config.yml. In the example
-layout each row adds 5 slots: 1 row = 5, 2 rows = 10, 3 rows = 15, up to
-6 rows = 30. The first three rows (slots 4–8, 13–17 and 22–26) have not
-been changed; additional rows use configurable slots 31–35, 40–44 and 49–53.
+from the `storage-slots` list in VoxelVehicles config.yml. In the updated six-column default
+layout each row adds 6 slots: 1 row = 6, 2 rows = 12, 3 rows = 18, up to
+6 rows = 36. The first three rows now use slots 3–8, 12–17 and 21–26;
+additional rows use slots 30–35, 39–44 and 48–53. Existing server
+config.yml files are NOT automatically rewritten and may still use the old
+five-column mapping; a per-vehicle `storage-slots` list overrides them.
 GUI size defaults to a minimum of three rows to preserve the existing
 preview window. A vehicle asking for four to six cargo rows opens a taller
 GUI and needs a correspondingly taller resource-pack background glyph.
@@ -491,3 +493,42 @@ inventory:
     without-storage: "&f:offset_-8::vehicle_inventory:"
     with-storage: "&f:offset_-8::vehicle_inventory_storage:"
 ```
+
+
+### Vehicle-specific cargo layout and filler hover tooltip
+
+An existing server config may still have only five cargo slots per row.
+The new default is **six**, but an existing `config.yml` is not overwritten
+when VoxelVehicles updates. In that case, the custom vehicle can explicitly
+define the desired six-column mapping under `properties.vehicle.inventory`:
+
+```yaml
+inventory:
+  enabled: true
+  storage_enabled: true
+  rows: 3
+  preview-slot: 10
+  preview_item: voxel:tractor_icon
+  fill-item: "voxel:ui/blank"
+  fill-copy-preview-meta: true
+  storage-slots: [3, 4, 5, 6, 7, 8, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25, 26]
+```
+
+The per-vehicle `storage-slots` list takes priority over the global
+`inventory.storage-slots` in `plugins/VoxelVehicles/config.yml`. Any
+configured slot in the first `rows` rows becomes genuine storage and is
+never populated with a filler. Thus 3, 12 **and 23** all become usable
+cargo slots in this example. The currently active layout can be verified
+by manually placing an item and confirming it survives closing/reopening.
+
+`fill-copy-preview-meta: true` (global default) copies only the preview
+ItemStack's **display name and lore** onto a cloned invisible filler item.
+It does **not** copy the preview model, VoxelCore identifier, model
+components or other render data. This makes hovering the black preview panel
+feel like hovering the actual vehicle icon. Set the value to `false` globally
+or per vehicle if you want filler tooltips to remain independent.
+
+The default driving shortcut remains F (swap hands), or `/vv inventory`.
+The E inventory key is client-handled for ItemDisplay mounts, so a Paper
+listener cannot replace it with a server menu; a different client-visible
+mount type or client mod is needed for native E integration.
