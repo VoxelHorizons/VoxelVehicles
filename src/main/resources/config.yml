@@ -1,0 +1,6 @@
+# Movement is processed synchronously on the main thread, never in a packet callback.
+physics:
+  autosave-ticks: 200
+  max-substep: 0.25
+render:
+  interpolation-ticks: 1
