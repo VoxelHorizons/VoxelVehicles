@@ -28,10 +28,11 @@ final class VehicleCollision {
         final double x0,y0,z0,x1,y1,z1;
         Body(Location at,VehicleDefinition d){
             Location base=VehicleTransform.collisionBase(at,d);
-            double half=d.width*0.5;
+            // Interaction and model dimensions must NEVER influence terrain physics.
+            double half=d.collisionWidth*0.5;
             x0=base.getX()-half;z0=base.getZ()-half;
             x1=base.getX()+half;z1=base.getZ()+half;
-            y0=base.getY();y1=base.getY()+d.height;
+            y0=base.getY();y1=base.getY()+d.collisionHeight;
         }
     }
 
