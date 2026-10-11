@@ -28,6 +28,9 @@ public final class VehicleManager {
     private VehicleInventories inventories;
     private final Map<UUID,VehicleInstance> instances=new LinkedHashMap<UUID,VehicleInstance>();
     private final VehicleChunkIndex chunkIndex=new VehicleChunkIndex();
+    // Ray targeting follows the interaction centre, which can be far from
+    // the vehicle's logical origin because of authored model offsets.
+    private final VehicleChunkIndex clickIndex=new VehicleChunkIndex();
     private final Map<UUID,UUID> entityIndex=new HashMap<UUID,UUID>();
     // Dedicated hot path: never scan unloaded or parked instances each server tick.
     private final Map<UUID,VehicleInstance> occupied=new LinkedHashMap<UUID,VehicleInstance>();
@@ -85,6 +88,9 @@ public final class VehicleManager {
         }
         definitions=next;
         revision=core.getContentRuntime().current().revision();
+        // Hitbox offsets can change on VoxelCore reload; rebuild target
+        // locations without changing persisted/physics vehicle origins.
+        for(VehicleInstance v:instances.values())indexChunk(v);
         synchronizeLoaded();
     }
 
@@ -199,6 +205,7 @@ public final class VehicleManager {
         if(v.hasStoredItems()||v.chestInstalled())return false;
         if(instances.remove(v.id)==null)return false;
         chunkIndex.remove(v.id);
+        clickIndex.remove(v.id);
         if(inventories!=null)inventories.closeFor(v);
         occupied.remove(v.id);
         deindex(v);renderer.deactivate(v);save();return true;
@@ -360,7 +367,10 @@ public final class VehicleManager {
         Vector ray=eye.getDirection().normalize();
         VehicleInstance nearest=null;
         double best=reach;
-        for(UUID id:chunkIndex.nearby(eye.getWorld().getUID(),eye.getX(),eye.getZ(),reach)){
+        // Hitboxes can extend up to 8 blocks beyond their centres.
+        // Index the authored HITBOX centre, not the distant model origin.
+        for(UUID id:clickIndex.nearby(eye.getWorld().getUID(),
+                eye.getX(),eye.getZ(),reach+8.0)){
             VehicleInstance v=instances.get(id);
             if(v==null||!v.active()||v.driver!=null
                     ||!v.location.getWorld().equals(eye.getWorld()))continue;
@@ -397,9 +407,16 @@ public final class VehicleManager {
         index(v);
     }
     private void indexChunk(VehicleInstance v){
-        if(v.location.getWorld()!=null)
-            chunkIndex.update(v.id,v.location.getWorld().getUID(),
-                    v.location.getX(),v.location.getZ());
+        if(v.location.getWorld()==null)return;
+        UUID world=v.location.getWorld().getUID();
+        chunkIndex.update(v.id,world,v.location.getX(),v.location.getZ());
+        VehicleDefinition definition=definitions.get(v.type);
+        if(definition==null){
+            clickIndex.remove(v.id);
+        }else{
+            Location centre=VehicleTransform.hitbox(v.location,definition);
+            clickIndex.update(v.id,world,centre.getX(),centre.getZ());
+        }
     }
 
     private void index(VehicleInstance v){
@@ -539,6 +556,7 @@ public final class VehicleManager {
         if(inventories!=null)inventories.shutdown();
         save();
         for(VehicleInstance v:instances.values())renderer.deactivate(v);
-        occupied.clear();particleSources.clear();entityIndex.clear();chunkIndex.clear();
+        occupied.clear();particleSources.clear();entityIndex.clear();
+        chunkIndex.clear();clickIndex.clear();
     }
 }
