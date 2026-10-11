@@ -359,6 +359,7 @@ On each vehicle definition, configure `properties.vehicle.inventory`:
 # A vehicle with three rows of storage in the right-hand panel:
 inventory:
   enabled: true
+  storage_enabled: true
   rows: 3
   preview_item: voxel:tractor_icon
 
@@ -381,7 +382,12 @@ vehicle dye color if both the item and its VoxelCore definition are dyeable.
 The preview item is locked and never counted as cargo.
 
 To open a vehicle inventory, **sneak + right-click** an unoccupied
-vehicle **with any held item**; normal right-click mounts it. While riding,
+vehicle **with any held item**; normal right-click mounts it. The pickup
+fallback intentionally ignores **all crouching arm swings** so a right-click
+animation cannot accidentally reclaim/drop the tractor; deliberate ordinary
+left clicks still pick up an empty, unoccupied vehicle. VoxelVehicles also
+processes sneaking entity interactions that other plugins pre-cancelled, with
+a targeted block/air right-click fallback for custom Interaction hitboxes. While riding,
 press **F (swap hands)** to open the vehicle menu without actually swapping
 held items, or use `/vv inventory` at any time while riding or nearby.
 The F shortcut can be disabled with `inventory.open-with-swap-hand: false`
@@ -406,7 +412,15 @@ preview window. A vehicle asking for four to six cargo rows opens a taller
 GUI and needs a correspondingly taller resource-pack background glyph.
 The `inventory.rows` in **VoxelVehicles config.yml** is the minimum GUI
 height; the `inventory.rows` in **VoxelCore properties.vehicle** is the
-number of enabled cargo rows.
+number of available cargo rows when `storage_enabled` is true.
+
+**Independent controls:** `inventory.enabled: false` disables the **entire**
+vehicle menu, including the model preview. `storage_enabled: false` retains
+the preview menu but switches to the **no-storage title** and locks all cargo
+slots, even if `rows: 3` is still configured. Default `storage_enabled` is
+true when `rows > 0`, preserving older content. Stored cargo is never
+discarded if a vehicle is temporarily switched to preview-only; re-enable
+storage to retrieve items. Nonempty cargo also continues to block vehicle pickup.
 
 Vehicle storage is saved in `vehicles.yml` under the stable per-instance
 UUID, using Bukkit ItemStack serialization. The current version supports a
