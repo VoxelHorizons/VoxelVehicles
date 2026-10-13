@@ -184,6 +184,11 @@ public final class VehicleManager {
             if(source!=null&&core.getItemManager().isDyeable(source))
                 dyeColor=core.getItemManager().getDyeColor(source).orElse(null);
             VehicleInstance v=new VehicleInstance(UUID.randomUUID(),type,owner,where,dyeColor);
+            // Save the actual item from the hand, not the generic drop/model
+            // item: its exact VoxelCore ID and metadata must survive pickup.
+            // Console/admin spawns have no source; generate this concrete type.
+            v.originalItem=VehiclePickupItem.capture(source!=null
+                    ?source:core.getItemManager().createItem(type));
             activate(v,d);
             instances.put(v.id,v);
             indexChunk(v);
