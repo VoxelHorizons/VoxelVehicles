@@ -255,7 +255,7 @@ final class VehicleInventories implements Listener {
      * custom PDC/model components with the original vehicle identity.
      */
     static ItemStack copyOriginalVehiclePresentation(ItemStack preview,ItemStack original){
-        if(preview==null||original==null||!original.hasItemMeta())return preview;
+        if(preview==null||original==null)return preview;
         ItemStack decorated=preview.clone();
         ItemMeta originalMeta=original.getItemMeta();
         ItemMeta previewMeta=decorated.getItemMeta();
