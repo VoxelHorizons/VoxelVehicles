@@ -49,6 +49,8 @@ public final class VehicleManager {
         this.store=new VehicleStore(new File(plugin.getDataFolder(),"vehicles.yml"));
     }
 
+    VehicleProtection protection(){ return plugin.protection(); }
+
     void start(){
         refreshDefinitions();
         store.load(instances);
