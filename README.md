@@ -576,13 +576,19 @@ inventory:
 | Interaction | Action |
 | --- | --- |
 | Normal right-click the tractor (even holding CHEST) | Mount, as usual |
-| Shift + right-click while holding CHEST (only compatible vehicles) | Attach one chest; enable storage |
+| Shift + right-click while holding CHEST (only compatible vehicles without a chest) | Attach one chest **without opening the inventory** |
 | Shift + right-click with any other item or an empty hand | Open the existing vehicle inventory |
 | Shift + right-click with CHEST when chest is already installed | Open inventory; do not consume another chest |
 | Click attached chest accessory with right-click | Open the vehicle inventory |
 | Left-click attached chest accessory without crouching | Detach chest, only when completely empty |
 | `/vv chest remove` (within six blocks or mounted) | Remove empty chest when no accessory exists or is difficult to target |
 | F while mounted | Open vehicle inventory (default existing shortcut) |
+
+On Paper, one physical shift-right-click can generate multiple entity
+and fallback interaction events. VoxelVehicles suppresses duplicate events
+immediately following a chest install so the storage UI cannot accidentally
+open from the installation click itself. A separate right-click still opens
+storage as expected, even while a chest remains in the player's hand.
 
 **The vehicle GUI contains no chest installation button, reserved chest slot,
 or equipment cell.** All non-cargo slots continue to use the existing
@@ -601,6 +607,46 @@ and storage slots remain locked; after installing the chest the
 The upgrade persists through server restarts. Removal is denied if
 any stored cargo remains (including hidden cargo), and the tractor itself
 cannot be picked up until the chest is removed.
+
+### Chest-specific vehicle inventory preview
+
+An optional chest-specific VoxelCore icon can replace the normal inventory
+preview when the storage upgrade is attached. Define the icon separately and
+set `chest.preview_item` alongside the existing `inventory.preview_item`:
+
+```yaml
+inventory:
+  enabled: true
+  rows: 3
+  preview-slot: 10
+  preview_item: voxel:tractor_icon
+  fill-item: "voxel:ui/blank"
+  chest:
+    enabled: true
+    item: CHEST
+    preview_item: voxel:tractor_chest_icon
+    visual:
+      mode: MODEL_SWAP
+      model_item: voxel:tractor_chest
+```
+
+While no chest is installed, the menu continues to render
+`inventory.preview_item` (or `vehicle.model_item` if that is omitted).
+Once the chest is installed, the menu renders `chest.preview_item`
+regardless of the chest's visual mode. Detaching the chest reverts the
+preview on the next inventory open. The icon receives the vehicle's stored
+dye color exactly as the original preview did. Its hover name, lore,
+enchantments/glint, item flags and unbreakable presentation now come from
+the **original placed vehicle ItemStack**, saved in `vehicles.yml` (PR #16),
+not the generic `tractor_icon` or `tractor_chest_icon` definition.
+The preview keeps its own render identity/model and structured custom model
+data, and the invisible filler copies the resulting name/lore. For vehicles
+saved before `original-item` existed, the plugin reconstructs the concrete
+vehicle type (and stored dye) as it does for pickup, rather than using the
+configured generic model/drop item. If the
+optional `chest.preview_item` is omitted, existing menus behave exactly
+as before. The chest visual's `model_item` and this GUI-only preview are
+independent.
 
 ### Visual positioning and alternatives
 

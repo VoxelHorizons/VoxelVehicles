@@ -12,6 +12,8 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.ItemFlag;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.voxelhorizons.content.item.ItemDefinition;
@@ -109,13 +111,20 @@ final class VehicleInventories implements Listener {
             inv.setItem(cargo.get(i),vehicle.storage[i].clone());
         // Construct the preview first so all decorative fillers may inherit
         // its visible hover title/lore without inheriting its 3D item model.
-        ContentID itemId=definition.inventory.previewItem!=null
-                ?definition.inventory.previewItem:definition.model;
+        ContentID itemId=definition.inventory.previewFor(vehicle,definition.model);
         ItemStack previewItem;
         try{
             previewItem=core.getItemManager().createRenderItem(itemId);
             if(vehicle.dyeColor!=null&&core.getItemManager().isDyeable(previewItem))
                 previewItem=core.getItemManager().setDyeColor(previewItem,vehicle.dyeColor.intValue());
+            // The icon chooses only the GUI model. Hover details come from the
+            // original vehicle item saved at placement (as with vehicle pickup),
+            // never from the generic tractor_icon/tractor_chest_icon definition.
+            ItemStack original=VehiclePickupItem.resolve(vehicle,
+                    id->core.getItemManager().createItem(id),
+                    stack->core.getItemManager().isDyeable(stack),
+                    (stack,color)->core.getItemManager().setDyeColor(stack,color));
+            previewItem=copyOriginalVehiclePresentation(previewItem,original);
             inv.setItem(preview,previewItem);
         }catch(RuntimeException error){
             plugin.getLogger().warning("Cannot render vehicle GUI preview "+itemId+": "+error.getMessage());
@@ -234,6 +243,42 @@ final class VehicleInventories implements Listener {
         copyPreviewHover(fillMeta,previewMeta);
         decorated.setItemMeta(fillMeta);
         return decorated;
+    }
+
+    /**
+     * Keep the special preview's VoxelCore identity, custom model data, tint
+     * components and item-model provider intact. Only project the source
+     * vehicle's visible ItemMeta onto a CLONE of the preview item.
+     *
+     * We must not swap full ItemMeta: that would turn the chest preview back
+     * into the original held tractor model, and could replace the icon's
+     * custom PDC/model components with the original vehicle identity.
+     */
+    static ItemStack copyOriginalVehiclePresentation(ItemStack preview,ItemStack original){
+        if(preview==null||original==null)return preview;
+        ItemStack decorated=preview.clone();
+        ItemMeta originalMeta=original.getItemMeta();
+        ItemMeta previewMeta=decorated.getItemMeta();
+        if(originalMeta==null||previewMeta==null)return decorated;
+        copyVehiclePresentation(previewMeta,originalMeta);
+        decorated.setItemMeta(previewMeta);
+        return decorated;
+    }
+
+    /** Copy the original name, lore, glint, item flags and unbreakable state. */
+    static void copyVehiclePresentation(ItemMeta previewMeta,ItemMeta sourceMeta){
+        copyPreviewHover(previewMeta,sourceMeta);
+        // The enchantment set and ItemFlags affect the inventory tooltip/glint.
+        // Do not propagate underlying persistent custom data or render fields.
+        for(Enchantment enchantment:new ArrayList<Enchantment>(previewMeta.getEnchants().keySet()))
+            previewMeta.removeEnchant(enchantment);
+        for(Map.Entry<Enchantment,Integer> entry:sourceMeta.getEnchants().entrySet())
+            previewMeta.addEnchant(entry.getKey(),entry.getValue().intValue(),true);
+        ItemFlag[] existingFlags=previewMeta.getItemFlags().toArray(new ItemFlag[0]);
+        if(existingFlags.length>0)previewMeta.removeItemFlags(existingFlags);
+        ItemFlag[] originalFlags=sourceMeta.getItemFlags().toArray(new ItemFlag[0]);
+        if(originalFlags.length>0)previewMeta.addItemFlags(originalFlags);
+        previewMeta.setUnbreakable(sourceMeta.isUnbreakable());
     }
 
     /** The metadata copy is testable without a running Bukkit item factory. */
