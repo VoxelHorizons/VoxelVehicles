@@ -72,10 +72,11 @@ final class VehicleChestRenderer {
     void move(VehicleInstance v,VehicleDefinition d){
         if(v.chestDisplay==null||!v.chestDisplay.isValid())return;
         boolean previouslyLinked=v.chestPassengerLinked;
+        boolean wasActuallyAttached=VehicleChestMount.attached(v);
         boolean linked=VehicleChestMount.ensure(v,d.inventory.chest.attachToVehicle);
-        if(linked!=previouslyLinked)syncInterpolation(v,teleportDuration(v));
+        if(linked!=wasActuallyAttached)syncInterpolation(v,teleportDuration(v));
         if(linked){
-            if(!previouslyLinked){
+            if(!wasActuallyAttached){
                 // A passenger doesn't reliably inherit its host's YAW on
                 // Minecraft clients. Never fight that with setRotation every
                 // tick; remember the initial yaw and rotate the LOCAL item
@@ -102,7 +103,7 @@ final class VehicleChestRenderer {
         }else{
             // A server that rejects passenger displays retains the previous
             // independent root teleport method and its original local matrix.
-            if(previouslyLinked){
+            if(previouslyLinked||wasActuallyAttached){
                 try{matrix(v,d,0.0f);}
                 catch(Exception error){plugin.getLogger().warning(
                         "Cannot reset detached chest model "+v.id+": "+error.getMessage());}
