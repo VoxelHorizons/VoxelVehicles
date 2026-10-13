@@ -36,6 +36,20 @@ final class VehicleListener implements Listener {
     // Right-clicks can also emit hand animations on some client versions.
     // Tracking right-click intent prevents those swings from claiming a vehicle.
     private final Map<UUID,Long> recentRightClicks=new HashMap<UUID,Long>();
+    // A single physical shift-right-click may arrive through entity,
+    // at-entity and block/air fallback event paths. Installing the chest
+    // changes state mid-click; subsequent events must not interpret it as
+    // another click to open the newly available storage.
+    private final Map<UUID,ChestInstallClick> recentChestInstalls=new HashMap<UUID,ChestInstallClick>();
+
+    private static final class ChestInstallClick {
+        final UUID vehicleId;
+        final long tick;
+        ChestInstallClick(UUID vehicleId,long tick){
+            this.vehicleId=vehicleId;
+            this.tick=tick;
+        }
+    }
     VehicleListener(VoxelVehicles plugin,VehicleManager vehicles,VoxelCore core) {
         this.plugin=plugin;this.vehicles=vehicles;this.core=core;
     }
@@ -69,6 +83,10 @@ final class VehicleListener implements Listener {
         Player player=event.getPlayer();
         markRightClick(player);
         event.setCancelled(true);
+        // Some server versions dispatch interact, interactAt and fallback for
+        // one click. Never open an inventory from a follow-up event immediately
+        // after this very click installed a chest.
+        if(suppressChestInstallFollowup(player,v))return;
         VehicleDefinition d=vehicles.definition(v.type).orElse(null);
         if(d==null)return;
         if(!d.publicAccess&&!v.owner.equals(player.getUniqueId())
@@ -116,6 +134,7 @@ final class VehicleListener implements Listener {
         if(v==null)return;
         markRightClick(player);
         event.setCancelled(true);
+        if(suppressChestInstallFollowup(player,v))return;
         if(!tryInstallChest(v,player))openInventory(player,v);
     }
 
@@ -139,13 +158,15 @@ final class VehicleListener implements Listener {
                 d.inventory.enabled,d.inventory.storageEnabled,d.inventory.rows,
                 hand==null?org.bukkit.Material.AIR:hand.getType(),d.inventory.chest.item))
             return false;
+        // An already-upgraded vehicle should behave like any normal
+        // shift-right-click: open its storage even when holding a chest.
+        // The same-click install guard above distinguishes this case from
+        // the second event dispatched after a fresh installation.
+        if(vehicle.chestInstalled())return false;
+        rememberChestInstallClick(player,vehicle);
         if(!vehicle.owner.equals(player.getUniqueId())
                 &&!player.hasPermission("voxelvehicles.admin")){
             player.sendMessage("§cOnly the owner can install a chest on this vehicle.");
-            return true;
-        }
-        if(vehicle.chestInstalled()){
-            openInventory(player,vehicle);
             return true;
         }
         if(vehicle.driver!=null&& !vehicle.driver.equals(player.getUniqueId()))return true;
@@ -173,6 +194,25 @@ final class VehicleListener implements Listener {
         for(ItemStack excess:remaining.values())
             player.getWorld().dropItemNaturally(player.getLocation(),excess);
         player.sendMessage("§aStorage chest removed.");
+    }
+
+    /** Ignore duplicate event paths from one chest-install click, not future clicks. */
+    static boolean isChestInstallFollowup(UUID vehicleId,UUID lastVehicleId,long lastTick,long now){
+        if(vehicleId==null||lastVehicleId==null||!vehicleId.equals(lastVehicleId))return false;
+        long elapsed=now-lastTick;
+        // A fallback interaction can be dispatched on the next server tick.
+        return elapsed>=0&&elapsed<=1;
+    }
+
+    private boolean suppressChestInstallFollowup(Player player,VehicleInstance vehicle){
+        ChestInstallClick last=recentChestInstalls.get(player.getUniqueId());
+        return last!=null&&isChestInstallFollowup(vehicle.id,last.vehicleId,last.tick,
+                player.getWorld().getFullTime());
+    }
+
+    private void rememberChestInstallClick(Player player,VehicleInstance vehicle){
+        recentChestInstalls.put(player.getUniqueId(),
+                new ChestInstallClick(vehicle.id,player.getWorld().getFullTime()));
     }
 
     private void markRightClick(Player player){
@@ -291,6 +331,7 @@ final class VehicleListener implements Listener {
 
     @EventHandler public void leave(PlayerQuitEvent event){
         recentRightClicks.remove(event.getPlayer().getUniqueId());
+        recentChestInstalls.remove(event.getPlayer().getUniqueId());
         vehicles.dismount(event.getPlayer());
     }
     @EventHandler public void load(ChunkLoadEvent event){vehicles.loadChunk(event.getChunk());}
