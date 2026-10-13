@@ -532,3 +532,108 @@ The default driving shortcut remains F (swap hands), or `/vv inventory`.
 The E inventory key is client-handled for ItemDisplay mounts, so a Paper
 listener cannot replace it with a server menu; a different client-visible
 mount type or client mod is needed for native E integration.
+
+
+## Optional installable chest storage (PR #11)
+
+Only vehicles with `properties.vehicle.inventory.chest.enabled: true`
+accept chest upgrades. Existing vehicle definitions without this property
+preserve their normal always-available storage.
+
+Add the following under the tractor's existing
+`items.tractor.properties.vehicle.inventory` settings:
+
+```yaml
+inventory:
+  enabled: true
+  storage_enabled: true
+  rows: 3
+  preview-slot: 10
+  preview_item: voxel:tractor_icon
+  fill-item: "voxel:ui/blank"
+  fill-copy-preview-meta: true
+  title: "&f:offset_-8::vehicle_inventory:&rTractor"
+  storage_title: "&f:offset_-8::vehicle_inventory_storage:&rTractor"
+  storage-slots: [3, 4, 5, 6, 7, 8, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25, 26]
+
+  chest:
+    enabled: true
+    item: CHEST               # Vanilla item required to install storage
+    visual:
+      mode: ITEM_DISPLAY      # NONE | ITEM_DISPLAY | MODEL_SWAP
+      # item: voxel:tractor_chest  # Optional VoxelCore model for the chest
+      offset: {x: 0.0, y: 1.0, z: -1.5}
+      scale: 0.8
+      yaw: 0.0
+      follow_tilt: true
+      interaction: true
+      interaction_width: 0.8
+      interaction_height: 0.8
+```
+
+### Vehicle interaction controls
+
+| Interaction | Action |
+| --- | --- |
+| Normal right-click the tractor (even holding CHEST) | Mount, as usual |
+| Shift + right-click while holding CHEST (only compatible vehicles) | Attach one chest; enable storage |
+| Shift + right-click with any other item or an empty hand | Open the existing vehicle inventory |
+| Shift + right-click with CHEST when chest is already installed | Open inventory; do not consume another chest |
+| Click attached chest accessory with right-click | Open the vehicle inventory |
+| Left-click attached chest accessory without crouching | Detach chest, only when completely empty |
+| `/vv chest remove` (within six blocks or mounted) | Remove empty chest when no accessory exists or is difficult to target |
+| F while mounted | Open vehicle inventory (default existing shortcut) |
+
+**The vehicle GUI contains no chest installation button, reserved chest slot,
+or equipment cell.** All non-cargo slots continue to use the existing
+invisible filler. The command is intended as a removal fallback, not
+required for normal use.
+
+Chest installs are restricted to the vehicle owner and admins, including
+for `public: true` vehicles. One item from the main-hand stack is consumed,
+and its full original ItemStack data is saved with the vehicle. Removal
+returns that same item to inventory, dropping it safely at the player if
+inventory is full.
+
+Without the upgrade, the ordinary no-storage background/title is used
+and storage slots remain locked; after installing the chest the
+`storage_title` becomes active and the configured slots unlock.
+The upgrade persists through server restarts. Removal is denied if
+any stored cargo remains (including hidden cargo), and the tractor itself
+cannot be picked up until the chest is removed.
+
+### Visual positioning and alternatives
+
+Chest `visual.offset` is specified in blocks in the vehicle model's local
+coordinate space; **+Z is forward and -Z is behind**. The sample coordinates
+are a starting point only. The accessory can track vehicle yaw, movement
+and optional suspension tilt. A separate click Interaction is optional;
+it does not change the physical tractor collision body or rider position.
+
+**Accessory alignment (PR #11 follow-up):** The chest and tractor ItemDisplays
+now share the exact same world anchor at the tractor's permanent seat root
+on every movement tick. Both interpolate over the same teleport interval,
+including when a player mounts/dismounts. The chest gets its offsets, tilt,
+local yaw and scale entirely from a transform matrix; it does **not** orbit
+the tractor through separately rotated world-space teleports when steering.
+The chest's independent Interaction hitbox still follows its calculated
+world-space location, so players can click on the actual accessory. The
+`visual.offset` settings do not need to change when upgrading the JAR;
+reposition them only if the chest needs to sit elsewhere on your model.
+
+
+Use `visual.mode: MODEL_SWAP` with
+`visual.model_item: voxel:tractor_with_chest` to replace the tractor model
+while installed, or `visual.mode: NONE` to enable chest storage without
+a world-space chest display. A model-swap item must exist as a registered
+VoxelCore content ID. `visual.item` in ITEM_DISPLAY mode likewise accepts
+a registered VoxelCore item, and defaults to displaying the vanilla chest.
+Set `visual.interaction: false` to render an accessory without its own
+clickbox.
+
+A legacy `chest.slot` setting from earlier development builds is ignored
+but accepted, to avoid breaking existing configurations. It no longer
+affects the inventory layout and can be removed.
+
+The original ItemDisplay mount still cannot intercept the vanilla E key.
+F and `/vv inventory` remain available.

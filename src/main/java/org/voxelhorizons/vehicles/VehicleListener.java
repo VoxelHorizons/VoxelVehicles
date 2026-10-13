@@ -69,11 +69,26 @@ final class VehicleListener implements Listener {
         Player player=event.getPlayer();
         markRightClick(player);
         event.setCancelled(true);
-        if(player.isSneaking()){
+        VehicleDefinition d=vehicles.definition(v.type).orElse(null);
+        if(d==null)return;
+        if(!d.publicAccess&&!v.owner.equals(player.getUniqueId())
+                &&!player.hasPermission("voxelvehicles.admin")){
+            player.sendMessage("§cYou cannot modify this vehicle.");return;
+        }
+        // Clicking the attached chest opens the inventory; it is not an
+        // installation/removal control and never alters the player's held item.
+        if(isChestAccessory(v,event.getRightClicked())){
             openInventory(player,v);
             return;
         }
-        if(!vehicles.mount(v,player))player.sendMessage("§cThis vehicle is already occupied or access is denied.");
+        if(player.isSneaking()){
+            // Only crouch + right-click with a chest can attach storage.
+            // Any other held item (including empty hand) opens the GUI.
+            if(!tryInstallChest(v,player))openInventory(player,v);
+            return;
+        }
+        if(!vehicles.mount(v,player))
+            player.sendMessage("§cThis vehicle is already occupied or access is denied.");
     }
 
     /**
@@ -101,7 +116,63 @@ final class VehicleListener implements Listener {
         if(v==null)return;
         markRightClick(player);
         event.setCancelled(true);
-        openInventory(player,v);
+        if(!tryInstallChest(v,player))openInventory(player,v);
+    }
+
+    static boolean shouldAttemptChestInstall(boolean crouching,boolean chestEnabled,
+            boolean inventoryEnabled,boolean storageEnabled,int rows,
+            org.bukkit.Material hand,org.bukkit.Material required){
+        return crouching&&chestEnabled&&inventoryEnabled&&storageEnabled&&rows>0
+                &&hand==required;
+    }
+
+    private static boolean isChestAccessory(VehicleInstance vehicle,Entity clicked){
+        return (vehicle.chestHitbox!=null&&clicked.equals(vehicle.chestHitbox))
+                ||(vehicle.chestDisplay!=null&&clicked.equals(vehicle.chestDisplay));
+    }
+
+    private boolean tryInstallChest(VehicleInstance vehicle,Player player){
+        VehicleDefinition d=vehicles.definition(vehicle.type).orElse(null);
+        if(d==null)return false;
+        ItemStack hand=player.getInventory().getItemInMainHand();
+        if(!shouldAttemptChestInstall(player.isSneaking(),d.inventory.chest.enabled,
+                d.inventory.enabled,d.inventory.storageEnabled,d.inventory.rows,
+                hand==null?org.bukkit.Material.AIR:hand.getType(),d.inventory.chest.item))
+            return false;
+        if(!vehicle.owner.equals(player.getUniqueId())
+                &&!player.hasPermission("voxelvehicles.admin")){
+            player.sendMessage("§cOnly the owner can install a chest on this vehicle.");
+            return true;
+        }
+        if(vehicle.chestInstalled()){
+            openInventory(player,vehicle);
+            return true;
+        }
+        if(vehicle.driver!=null&& !vehicle.driver.equals(player.getUniqueId()))return true;
+        if(vehicles.installChest(vehicle,hand)){
+            int remaining=hand.getAmount()-1;
+            if(remaining>0)hand.setAmount(remaining);
+            else player.getInventory().setItemInMainHand(null);
+            player.sendMessage("§aStorage chest attached to vehicle.");
+        }else player.sendMessage("§cCannot attach a storage chest to this vehicle.");
+        return true;
+    }
+
+    // A deliberate LEFT click on the chest accessory detaches it when empty.
+    private void detachChest(VehicleInstance vehicle,Player player){
+        if(!vehicle.owner.equals(player.getUniqueId())
+                &&!player.hasPermission("voxelvehicles.admin")){
+            player.sendMessage("§cOnly the owner can remove this chest.");return;
+        }
+        ItemStack returned=vehicles.detachChest(vehicle);
+        if(returned==null){
+            player.sendMessage("§cEmpty the chest storage before detaching it.");
+            return;
+        }
+        Map<Integer,ItemStack> remaining=player.getInventory().addItem(returned);
+        for(ItemStack excess:remaining.values())
+            player.getWorld().dropItemNaturally(player.getLocation(),excess);
+        player.sendMessage("§aStorage chest removed.");
     }
 
     private void markRightClick(Player player){
@@ -169,7 +240,12 @@ final class VehicleListener implements Listener {
         if(v==null||!(event.getDamager() instanceof Player))return;
         event.setCancelled(true);
         Player player=(Player)event.getDamager();
-        if(!suppressPickup(player))collect(v,player);
+        if(suppressPickup(player))return;
+        if(isChestAccessory(v,event.getEntity())){
+            detachChest(v,player);
+            return;
+        }
+        collect(v,player);
     }
 
     /**
@@ -191,7 +267,7 @@ final class VehicleListener implements Listener {
                 &&!player.hasPermission("voxelvehicles.admin"))return;
         VehicleDefinition d=vehicles.definition(v.type).orElse(null);
         if(!vehicles.remove(v)){
-            player.sendMessage("§cEmpty the vehicle storage before picking it up.");
+            player.sendMessage("§cRemove the installed chest and empty vehicle storage before picking it up.");
             return;
         }
         if(d!=null){

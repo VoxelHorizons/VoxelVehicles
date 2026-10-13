@@ -46,6 +46,9 @@ final class VehicleStore {
                     color=Integer.valueOf(rgb);
                 }
                 VehicleInstance vehicle=new VehicleInstance(id,type,owner,new Location(world,x,y,z,yaw,0),color);
+                ItemStack attachedChest=section.getItemStack(key+".installed-chest");
+                if(attachedChest!=null&&attachedChest.getAmount()>0)
+                    vehicle.installedChest=attachedChest.clone();
                 ConfigurationSection cargo=section.getConfigurationSection(key+".storage");
                 if(cargo!=null)for(String slot:cargo.getKeys(false)){
                     int index=Integer.parseInt(slot);
@@ -62,12 +65,13 @@ final class VehicleStore {
 
     void save(Map<UUID,VehicleInstance> vehicles) throws IOException{
         YamlConfiguration config=new YamlConfiguration();
-        config.set("format",2);
+        config.set("format",3);
         for(VehicleInstance v:vehicles.values()){
             String k="vehicles."+v.id+".";
             config.set(k+"type",v.type.toString());
             config.set(k+"owner",v.owner.toString());
             if(v.dyeColor!=null)config.set(k+"color",v.dyeColor);
+            if(v.chestInstalled())config.set(k+"installed-chest",v.installedChest.clone());
             config.set(k+"world",v.location.getWorld().getName());
             config.set(k+"x",v.location.getX());config.set(k+"y",v.location.getY());
             config.set(k+"z",v.location.getZ());config.set(k+"yaw",v.location.getYaw());

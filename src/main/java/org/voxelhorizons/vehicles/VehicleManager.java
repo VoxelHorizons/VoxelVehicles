@@ -98,9 +98,12 @@ public final class VehicleManager {
             }else{
                 try{
                     VehicleSuspension.initialize(v,d);
+                    deindex(v);
                     renderer.refresh(v,d);
                 }catch(Exception e){
                     plugin.getLogger().warning("Could not refresh "+v.id+": "+e.getMessage());
+                }finally{
+                    index(v);
                 }
             }
         }
@@ -162,12 +165,63 @@ public final class VehicleManager {
     public boolean remove(VehicleInstance v){
         if(inventories!=null)inventories.captureOpen();
         // Prevent dropping a vehicle item while deleting its cargo.
-        if(v.hasStoredItems())return false;
+        if(v.hasStoredItems()||v.chestInstalled())return false;
         if(instances.remove(v.id)==null)return false;
         if(inventories!=null)inventories.closeFor(v);
         occupied.remove(v.id);
         deindex(v);renderer.deactivate(v);save();return true;
     }
+    /** Install only one chest on vehicles explicitly configured to accept upgrades. */
+    boolean installChest(VehicleInstance v,ItemStack source){
+        VehicleDefinition d=definitions.get(v.type);
+        if(d==null||!d.inventory.enabled||!d.inventory.storageEnabled
+                ||d.inventory.rows==0||!d.inventory.chest.enabled
+                ||v.chestInstalled()||source==null||source.getType()!=d.inventory.chest.item
+                ||source.getAmount()<1||!v.active())return false;
+        ItemStack original=source.clone();original.setAmount(1);
+        if(inventories!=null)inventories.closeFor(v);
+        v.installedChest=original;
+        if(!updateChestVisual(v,d)){
+            v.installedChest=null;
+            updateChestVisual(v,d);
+            return false;
+        }
+        save();
+        return true;
+    }
+
+    /** Never detach while cargo is present, including hidden/inactive slots. */
+    ItemStack detachChest(VehicleInstance v){
+        VehicleDefinition d=definitions.get(v.type);
+        if(d==null||!d.inventory.chest.enabled||!v.chestInstalled())return null;
+        if(inventories!=null)inventories.captureOpen();
+        if(v.hasStoredItems())return null;
+        if(inventories!=null)inventories.closeFor(v);
+        ItemStack original=v.installedChest.clone();
+        v.installedChest=null;
+        if(!updateChestVisual(v,d)){
+            v.installedChest=original;
+            updateChestVisual(v,d);
+            return null;
+        }
+        save();
+        return original;
+    }
+
+    private boolean updateChestVisual(VehicleInstance v,VehicleDefinition d){
+        if(!v.active())return true;
+        try{
+            deindex(v);
+            renderer.refresh(v,d);
+            return true;
+        }catch(Exception error){
+            plugin.getLogger().warning("Cannot update chest for "+v.id+": "+error.getMessage());
+            return false;
+        }finally{
+            index(v);
+        }
+    }
+
     public boolean mount(VehicleInstance v,Player p){
         VehicleDefinition d=definitions.get(v.type);
         if(d==null||!v.active()||v.driver!=null||p.isInsideVehicle())return false;
@@ -283,11 +337,15 @@ public final class VehicleManager {
         if(v.display!=null)entityIndex.put(v.display.getUniqueId(),v.id);
         if(v.hitbox!=null)entityIndex.put(v.hitbox.getUniqueId(),v.id);
         if(v.seat!=null)entityIndex.put(v.seat.getUniqueId(),v.id);
+        if(v.chestDisplay!=null)entityIndex.put(v.chestDisplay.getUniqueId(),v.id);
+        if(v.chestHitbox!=null)entityIndex.put(v.chestHitbox.getUniqueId(),v.id);
     }
     private void deindex(VehicleInstance v){
         if(v.display!=null)entityIndex.remove(v.display.getUniqueId());
         if(v.hitbox!=null)entityIndex.remove(v.hitbox.getUniqueId());
         if(v.seat!=null)entityIndex.remove(v.seat.getUniqueId());
+        if(v.chestDisplay!=null)entityIndex.remove(v.chestDisplay.getUniqueId());
+        if(v.chestHitbox!=null)entityIndex.remove(v.chestHitbox.getUniqueId());
     }
     private boolean inChunk(Location loc,Chunk chunk){
         return loc.getWorld().equals(chunk.getWorld())&&(loc.getBlockX()>>4)==chunk.getX()

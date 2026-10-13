@@ -73,7 +73,7 @@ final class VehicleInventories implements Listener {
         // A vehicle selects storage rows (0=no storage); the configured GUI
         // has a minimum height to preserve the authored model preview panel.
         int minimumRows=plugin.getConfig().getInt("inventory.rows",3);
-        int storageRows=definition.inventory.effectiveStorageRows();
+        int storageRows=definition.inventory.effectiveStorageRows(vehicle);
         int rows=Math.max(minimumRows,storageRows);
         int size=rows*9;
         int preview=definition.inventory.previewSlot!=null
