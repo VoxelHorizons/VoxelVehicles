@@ -25,7 +25,7 @@ final class VehicleChestMount {
         if(v==null||v.display==null||v.chestDisplay==null
                 ||!v.display.isValid()||!v.chestDisplay.isValid())return false;
         if(!enabled){
-            release(v);
+            if(attached(v)||v.chestPassengerLinked)release(v);
             return false;
         }
         if(attached(v)){
