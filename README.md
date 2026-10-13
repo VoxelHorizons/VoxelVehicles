@@ -767,24 +767,23 @@ guarantee smooth rendering for every client/protocol implementation; verify
 in-game while steering, driving up slopes, dismounting and re-entering.
 
 
-### Chest vibration when steering (PR #15)
+### Chest turning stability (PR #15)
 
-For passenger-linked chest displays, the tractor ItemDisplay remains the
-only entity teleported as the vehicle turns. The chest previously received
-independent `setRotation` updates on every turning tick; Minecraft clients
-may interpolate those updates differently from the parent render root,
-causing minor shaking.
+When the chest is mounted as a passenger of the main tractor ItemDisplay,
+the tractor is the *only* owner of world yaw and movement. Do not send
+independent chest yaw packets or add another heading correction to its local
+matrix: the latter rotates the attachment offset around the seat, visibly
+making the chest orbit the cabin. The chest's matrix keeps only its authored
+offset, tilt and scale.
 
-Mounted chests now keep their yaw anchor from when they joined the tractor.
-The offset/model is turned around the **same seat-anchored pivot**, using a
-normalized shortest-arc yaw correction inside its local display matrix.
-No extra passenger entity teleports or entity rotation packets are sent.
-The correction is refreshed only while the heading changes, and JOML method
-lookups are cached to keep hundreds of moving vehicles affordable.
+Cosmetic tilt now uses the same interpolation duration as the main vehicle
+model. All of the existing physics, chest hitbox, inventory and passenger
+lifecycle behavior remains unchanged. Cached JOML method lookups avoid
+reflecting the matrix operations on every suspension update.
 
-The feature requires no configuration changes. `attach_to_vehicle: false`
-remains a compatibility fallback for clients/servers where display-passenger
-rendering misbehaves. To test, drive slowly in circles in both directions,
-cross the +/-180 and 0/360 yaw boundaries, and look for any attachment
-vibration while the tractor remains smooth. This update needs live client
-confirmation; automated tests cannot prove client-side render stability.
+For compatibility, `attach_to_vehicle: false` still selects independent
+teleports if a particular server/client cannot render passenger displays.
+
+Verify in-game by driving and steering both directions, including tight
+turns and 0°/360° yaw crossings, then driving on sloped terrain. Test the
+chest's physical mounting position and clicking the separate hitbox.
