@@ -270,13 +270,16 @@ final class VehicleListener implements Listener {
             player.sendMessage("§cVehicle definition unavailable; reload VoxelCore content before pickup.");
             return;
         }
-        // Resolve the original VoxelCore drop and per-placement tint *before*
-        // removing anything. Failed content lookups must not delete vehicles.
+        // Return the complete placed item: inherited/derived VoxelCore ID,
+        // display name, lore, item components and any custom metadata.
+        // Legacy vehicles without a saved source are rebuilt from v.type,
+        // NEVER d.drop (which may refer to an abstract/generic parent).
         ItemStack drop;
         try{
-            drop=core.getItemManager().createItem(d.drop);
-            if(drop!=null&&v.dyeColor!=null&&core.getItemManager().isDyeable(drop))
-                drop=core.getItemManager().setDyeColor(drop,v.dyeColor.intValue());
+            drop=VehiclePickupItem.resolve(v,
+                    core.getItemManager()::createItem,
+                    core.getItemManager()::isDyeable,
+                    (stack,color)->core.getItemManager().setDyeColor(stack,color.intValue()));
         }catch(RuntimeException error){
             plugin.getLogger().warning("Cannot prepare vehicle drop "+v.id+": "+error.getMessage());
             player.sendMessage("§cCannot prepare vehicle item drop; pickup cancelled.");
