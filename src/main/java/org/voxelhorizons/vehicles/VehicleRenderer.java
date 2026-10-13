@@ -120,7 +120,14 @@ final class VehicleRenderer {
         try{
             // Prefer the single-entity setup: the display is both the model
             // root and the mount, without an independent armor stand chasing it.
-            boolean directlyMounted=v.display.addPassenger(player);
+            boolean directlyMounted=false;
+            try{
+                directlyMounted=v.display.addPassenger(player);
+            }catch(RuntimeException rejected){
+                if(!VehicleChestMount.attached(v))throw rejected;
+                // Some implementations throw instead of returning false
+                // when the mounted chest occupies the primary rider slot.
+            }
             if(!directlyMounted&&VehicleChestMount.attached(v)){
                 // On servers limiting the number of direct passengers, the
                 // player always has priority. Temporarily unlink the chest,
