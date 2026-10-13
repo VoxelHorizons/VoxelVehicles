@@ -116,6 +116,13 @@ final class VehicleInventoryDefinition {
         return storageEnabled&&(!chest.enabled||vehicle.chestInstalled())?rows:0;
     }
 
+    /** Switch only the inventory preview when an optional chest upgrade is installed. */
+    ContentID previewFor(VehicleInstance vehicle,ContentID defaultModel){
+        if(chest.enabled&&vehicle.chestInstalled()&&chest.previewItem!=null)
+            return chest.previewItem;
+        return previewItem!=null?previewItem:defaultModel;
+    }
+
     private static String title(ContentID id,Object raw,String field){
         if(raw==null)return null;
         if(!(raw instanceof String))throw bad(id,"inventory."+field+" must be text");
