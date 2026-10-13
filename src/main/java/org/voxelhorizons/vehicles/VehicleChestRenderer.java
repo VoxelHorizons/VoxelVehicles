@@ -18,7 +18,33 @@ import java.util.UUID;
  * the accessory can still be clicked without changing the driver mount.
  */
 final class VehicleChestRenderer {
+    /**
+     * Resolve JOML reflection only once instead of rediscovering Matrix4f
+     * methods for every turn of every installed chest.
+     */
+    private static final class MatrixOps {
+        static final MatrixOps INSTANCE=new MatrixOps();
+        final Class<?> type;
+        final java.lang.reflect.Constructor<?> constructor;
+        final java.lang.reflect.Method translate,rotateX,rotateY,rotateZ,scale;
+        MatrixOps(){
+            try{
+                type=Class.forName("org.joml.Matrix4f");
+                constructor=type.getConstructor();
+                translate=type.getMethod("translate",float.class,float.class,float.class);
+                rotateX=type.getMethod("rotateX",float.class);
+                rotateY=type.getMethod("rotateY",float.class);
+                rotateZ=type.getMethod("rotateZ",float.class);
+                scale=type.getMethod("scale",float.class,float.class,float.class);
+            }catch(ReflectiveOperationException error){
+                throw new IllegalStateException("Modern Paper/JOML matrices unavailable",error);
+            }
+        }
+    }
+
     private final VoxelVehicles plugin;
+    private Class<?> setterOwner;
+    private java.lang.reflect.Method matrixSetter;
     VehicleChestRenderer(VoxelVehicles plugin){this.plugin=plugin;}
 
     void refresh(VehicleInstance v,VehicleDefinition d)throws Exception{
@@ -194,32 +220,31 @@ final class VehicleChestRenderer {
      */
     private void matrix(VehicleInstance v,VehicleDefinition d,float relativeYaw)throws Exception{
         VehicleChestDefinition c=d.inventory.chest;
-        Class<?> matrix=Class.forName("org.joml.Matrix4f");
-        Object value=matrix.getConstructor().newInstance();
-        // Apply turning at the same seat-anchored pivot as the tractor. This
-        // compensates for the mounted chest keeping its initial entity yaw,
-        // so no independent setRotation packets can oscillate against the
-        // parent's client-interpolated rotation. Rotate BEFORE translation.
+        MatrixOps ops=MatrixOps.INSTANCE;
+        Object value=ops.constructor.newInstance();
+        // Apply turning at the same seat-anchored pivot as the tractor.
+        // Passenger world yaw stays stable; its local model rotates before
+        // translation. This eliminates per-tick entity yaw packet conflicts.
         if(Math.abs(relativeYaw)>0.0001f)
-            matrix.getMethod("rotateY",float.class).invoke(value,
-                    (float)Math.toRadians(-relativeYaw));
-        double[] seatToModel=VehicleTransform.modelTranslation(d);
-        matrix.getMethod("translate",float.class,float.class,float.class).invoke(
-                value,(float)seatToModel[0],(float)seatToModel[1],(float)seatToModel[2]);
+            ops.rotateY.invoke(value,(float)Math.toRadians(-relativeYaw));
+        ops.translate.invoke(value,(float)-d.seatX,(float)-d.seatY,(float)-d.seatZ);
         if(c.followTilt){
             if(Math.abs(v.visualPitch)>0.001)
-                matrix.getMethod("rotateX",float.class).invoke(value,(float)Math.toRadians(-v.visualPitch));
+                ops.rotateX.invoke(value,(float)Math.toRadians(-v.visualPitch));
             if(Math.abs(v.visualRoll)>0.001)
-                matrix.getMethod("rotateZ",float.class).invoke(value,(float)Math.toRadians(v.visualRoll));
+                ops.rotateZ.invoke(value,(float)Math.toRadians(v.visualRoll));
         }
-        matrix.getMethod("translate",float.class,float.class,float.class).invoke(
-                value,(float)c.x,(float)c.y,(float)c.z);
+        ops.translate.invoke(value,(float)c.x,(float)c.y,(float)c.z);
         // Bukkit positive yaw and JOML positive Y-rotation are opposite.
         if(Math.abs(c.yaw)>0.001)
-            matrix.getMethod("rotateY",float.class).invoke(value,(float)Math.toRadians(-c.yaw));
-        matrix.getMethod("scale",float.class,float.class,float.class).invoke(
-                value,(float)c.scale,(float)c.scale,(float)c.scale);
-        v.chestDisplay.getClass().getMethod("setTransformationMatrix",matrix).invoke(v.chestDisplay,value);
+            ops.rotateY.invoke(value,(float)Math.toRadians(-c.yaw));
+        ops.scale.invoke(value,(float)c.scale,(float)c.scale,(float)c.scale);
+        Class<?> entityClass=v.chestDisplay.getClass();
+        if(matrixSetter==null||setterOwner!=entityClass){
+            matrixSetter=entityClass.getMethod("setTransformationMatrix",ops.type);
+            setterOwner=entityClass;
+        }
+        matrixSetter.invoke(v.chestDisplay,value);
     }
 
     void remove(VehicleInstance v){
