@@ -109,8 +109,7 @@ final class VehicleInventories implements Listener {
             inv.setItem(cargo.get(i),vehicle.storage[i].clone());
         // Construct the preview first so all decorative fillers may inherit
         // its visible hover title/lore without inheriting its 3D item model.
-        ContentID itemId=definition.inventory.previewItem!=null
-                ?definition.inventory.previewItem:definition.model;
+        ContentID itemId=definition.inventory.previewFor(vehicle,definition.model);
         ItemStack previewItem;
         try{
             previewItem=core.getItemManager().createRenderItem(itemId);
