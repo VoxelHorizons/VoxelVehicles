@@ -637,3 +637,76 @@ affects the inventory layout and can be removed.
 
 The original ItemDisplay mount still cannot intercept the vanilla E key.
 F and `/vv inventory` remain available.
+
+
+## Large-server vehicle performance (PR #12)
+
+The movement loop is designed to keep each driver's collision and display
+state correct **every server tick**. For large concurrent rider populations it
+now amortizes block collision shape decoding across all riders in the same world
+for the duration of a **single** tick (no stale cross-tick geometry). Clearance
+and grounded checks use an allocation-free contact query instead of building
+temporary overlap lists. The chest and tractor still share their existing
+render root, with position deduplication and no artificial frame skips.
+
+Vehicles with no particles and unloaded entities are excluded from the
+particle-emission hot list. Optional particle effect timing is unchanged.
+
+Placed vehicles are also indexed by **world and origin chunk**. Loading or
+unloading a chunk only visits vehicles in that chunk (instead of every
+vehicle ever placed). Interaction ray targeting checks neighboring chunk
+buckets, preserving the normal reach check. The index follows the vehicle
+across chunk boundaries and is removed on pickup.
+
+The periodic maintenance task repairs **missing** ItemDisplays and chest
+accessories, but no longer needlessly refreshes every healthy parked or
+mounted display on each maintenance interval. Explicit `/vv sync` and
+VoxelCore content revision changes still reapply all authored models, tint
+and rendering settings.
+
+The periodic orphan-entity sweep now inspects a bounded number of loaded
+chunks per server tick (default `maintenance.cleanup-chunks-per-tick: 16`,
+configurable from 1 to 256). Large numbers of player-loaded chunks are no
+longer scanned all at once during the maintenance callback. Partial sweeps
+are carried forward instead of restarted. `/vv cleanup` still performs
+the explicit full sweep when an admin requests it.
+
+### Observability
+
+An admin can run:
+
+```
+/vv perf
+```
+
+This reports rolling metrics from the **last 200 VoxelVehicles ticks**:
+
+- mean, 95th-percentile and peak **VoxelVehicles task** time (ms; includes
+  scheduled synchronous autosaves, collision, rendering and particle processing)
+- count of active riders, loaded and total placed vehicles
+- number of collision blocks decoded and reused per tick
+- actual entity teleports and redundant teleports avoided per tick
+
+The command does not log each tick and does not require external dependencies.
+**This is not whole-server MSPT**; use spark for whole-server profiling.
+
+### Benchmarking large groups
+
+Use several concurrent clients/bots or trusted real players to drive 25,
+50, 100, 200, and 300 vehicles while monitoring both `/vv perf` and
+`/spark profiler`. Keep render distance, tick settings, terrain and the
+number of other entities comparable across runs. Include steering, terrain
+steps, suspension and chest-installed vehicles.
+
+Check `/vv perf` while riders move and repeat after the population doubles.
+Watch the **p95** and peak vehicle task duration: 50ms is the total budget
+for every server subsystem combined, NOT the allowed vehicle-only workload.
+Also examine network bandwidth and the client's entity render load; low
+server MSPT cannot guarantee smooth client FPS for 300 display models.
+
+Avoid synthetic game-spawn/load commands on production; use a test server.
+Chunk generation/loading, main-thread `vehicles.yml` saving and Paper's
+entity teleport implementation remain important workloads. This PR does
+not bypass Bukkit entity safety, send raw movement packets, asynchronously
+mutate worlds, or reduce collision and passenger correctness in order to
+meet an unmeasured vehicle-count target.

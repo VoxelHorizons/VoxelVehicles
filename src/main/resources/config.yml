@@ -16,6 +16,11 @@ render:
 # 600 ticks = 30 seconds. Minimum is 100 ticks (5 seconds).
 maintenance:
   cleanup-ticks: 600
+  # Orphan renderer cleanup is spread across server ticks, not performed in
+  # one giant scan when players have thousands of chunks loaded.
+  # Maximum chunks checked each tick while a maintenance sweep is pending.
+  # Safe range: 1-256. Use a lower value if many players explore at once.
+  cleanup-chunks-per-tick: 16
 
 # Chest GUI: title glyphs are resolved by VoxelCore at open time.
 # These are defaults only: change them to any authored VoxelCore font aliases.

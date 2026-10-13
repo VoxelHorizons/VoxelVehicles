@@ -15,6 +15,8 @@ public final class VehicleInstance {
     public final VehiclePhysics.State motion;
     public Location location;
     public Entity display,hitbox,seat,chestDisplay,chestHitbox;
+    /** Last sent renderer positions; reset on unload/reactivation. */
+    final VehicleTeleportTracker teleports=new VehicleTeleportTracker();
     public UUID driver;
     /** True when the rider (or compatibility seat) rides the ItemDisplay root. */
     public boolean linkedSeat;

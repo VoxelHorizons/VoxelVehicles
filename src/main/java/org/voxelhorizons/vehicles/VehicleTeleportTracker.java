@@ -1,0 +1,104 @@
+package org.voxelhorizons.vehicles;
+
+import org.bukkit.Location;
+import org.bukkit.World;
+import org.bukkit.entity.Entity;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Tracks locations last successfully sent to VoxelVehicles-owned entities.
+ *
+ * Bukkit Entity.teleport is relatively expensive, especially for display
+ * entities with passengers. Only teleport when the target has actually
+ * changed. Interaction hitboxes are axis-aligned and do not need yaw updates
+ * if their world position is unchanged.
+ *
+ * The tracker is per logical vehicle and is cleared whenever its renderers
+ * are deactivated. A newly spawned entity has its initial pose recorded.
+ * Every legitimate movement still uses the regular Bukkit teleport API.
+ *
+ * Called only from the Paper server thread.
+ */
+final class VehicleTeleportTracker {
+    private static final class Pose {
+        World world;
+        double x, y, z;
+        float yaw, pitch;
+
+        Pose(Location at){update(at);}
+        void update(Location at){
+            world=at.getWorld();
+            x=at.getX();y=at.getY();z=at.getZ();
+            yaw=at.getYaw();pitch=at.getPitch();
+        }
+    }
+
+    private final Map<UUID,Pose> last=new HashMap<UUID,Pose>(5);
+    private int sent,avoided;
+
+    /**
+     * Exact comparison: no positional epsilon or frame skipping, which would
+     * otherwise introduce jitter or desynchronize the driver and chest.
+     */
+    static boolean changed(Location before,Location after,boolean rotationMatters) {
+        if(before==null || after==null)return true;
+        return before.getWorld()!=after.getWorld()
+                || Double.compare(before.getX(),after.getX())!=0
+                || Double.compare(before.getY(),after.getY())!=0
+                || Double.compare(before.getZ(),after.getZ())!=0
+                || (rotationMatters && (Float.compare(before.getYaw(),after.getYaw())!=0
+                        || Float.compare(before.getPitch(),after.getPitch())!=0));
+    }
+
+    private static boolean changed(Pose before,Location after,boolean rotationMatters) {
+        if(before==null || after==null)return true;
+        return before.world!=after.getWorld()
+                || Double.compare(before.x,after.getX())!=0
+                || Double.compare(before.y,after.getY())!=0
+                || Double.compare(before.z,after.getZ())!=0
+                || (rotationMatters && (Float.compare(before.yaw,after.getYaw())!=0
+                        || Float.compare(before.pitch,after.getPitch())!=0));
+    }
+
+    /**
+     * True when the entity is already at target or was successfully moved.
+     * False means Bukkit rejected the teleport; do not cache failed moves.
+     */
+    boolean ensure(Entity entity,Location target,boolean rotationMatters){
+        if(entity==null||!entity.isValid())return false;
+        UUID id=entity.getUniqueId();
+        Pose previous=last.get(id);
+        if(!changed(previous,target,rotationMatters)){
+            avoided++;
+            return true;
+        }
+        if(!entity.teleport(target))return false;
+        // Under hundreds of drivers, mutate the existing five-field pose
+        // rather than allocating another object for every movement packet.
+        if(previous==null)last.put(id,new Pose(target));
+        else previous.update(target);
+        sent++;
+        return true;
+    }
+
+    /** A newly spawned entity is already at its spawn target. */
+    void spawned(Entity entity,Location initial) {
+        if(entity!=null&&initial!=null)last.put(entity.getUniqueId(),new Pose(initial));
+    }
+
+    /** Upper 32 bits: sent; lower 32 bits: redundant calls avoided. */
+    long drainCounts(){
+        long packed=((long)sent<<32)|(avoided&0xffffffffL);
+        sent=0;avoided=0;
+        return packed;
+    }
+
+    void forget(Entity entity){
+        if(entity!=null)last.remove(entity.getUniqueId());
+    }
+
+    void clear(){last.clear();sent=0;avoided=0;}
+}

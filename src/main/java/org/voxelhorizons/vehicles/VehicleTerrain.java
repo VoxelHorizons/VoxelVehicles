@@ -9,7 +9,9 @@ import java.util.*;
 /**
  * World-space collision boxes, read from modern Minecraft block VoxelShapes.
  * Never forces a chunk load. Older Bukkit APIs fall back to full solid cubes.
- * Cache is deliberately per physics calculation so block edits are seen next tick.
+ * Collision shapes are cached across all vehicles within ONE server tick,
+ * scoped by world. Any block edits are reflected by the next tick without
+ * retaining stale data across frames or loading extra chunks.
  */
 final class VehicleTerrain {
     private VehicleTerrain(){}
@@ -48,18 +50,73 @@ final class VehicleTerrain {
         }
     }
 
+    /** No cross-tick cache: one shared snapshot per world and physics frame. */
+    static final class Frame {
+        private final Map<World,Space> worlds=new IdentityHashMap<World,Space>();
+        Space space(World world){
+            Space result=worlds.get(world);
+            if(result==null){
+                result=new Space(world);
+                worlds.put(world,result);
+            }
+            return result;
+        }
+        int decodedBlocks(){
+            int count=0;
+            for(Space space:worlds.values())count+=space.decodedBlocks;
+            return count;
+        }
+        int reusedBlocks(){
+            int count=0;
+            for(Space space:worlds.values())count+=space.reusedBlocks;
+            return count;
+        }
+        int worldCount(){return worlds.size();}
+    }
+
+    /** Integer coordinate key: no string building on every collision probe. */
+    private static final class BlockKey {
+        final int x,y,z;
+        BlockKey(int x,int y,int z){this.x=x;this.y=y;this.z=z;}
+        @Override public boolean equals(Object other){
+            if(this==other)return true;
+            if(!(other instanceof BlockKey))return false;
+            BlockKey key=(BlockKey)other;
+            return x==key.x&&y==key.y&&z==key.z;
+        }
+        @Override public int hashCode(){
+            int hash=31*x+y;
+            return 31*hash+z;
+        }
+    }
+
     static final class Space {
         private final World world;
-        private final Map<String,List<Box>> cache=new HashMap<String,List<Box>>();
+        private final Map<BlockKey,List<Box>> cache=new HashMap<BlockKey,List<Box>>();
+        private final Map<Long,Boolean> chunkLoaded=new HashMap<Long,Boolean>();
+        private int decodedBlocks,reusedBlocks;
         Space(World world){this.world=world;}
 
-        boolean loaded(int x,int z){return world.isChunkLoaded(x>>4,z>>4);}
+        boolean loaded(int x,int z){
+            int cx=x>>4,cz=z>>4;
+            // Exact 32-bit chunk coordinates packed into one 64-bit key.
+            Long key=Long.valueOf(((long)cx<<32)^(cz&0xffffffffL));
+            Boolean hit=chunkLoaded.get(key);
+            if(hit!=null)return hit.booleanValue();
+            boolean loaded=world.isChunkLoaded(cx,cz);
+            chunkLoaded.put(key,Boolean.valueOf(loaded));
+            return loaded;
+        }
 
         List<Box> block(int x,int y,int z){
-            String key=x+":"+y+":"+z;
+            BlockKey key=new BlockKey(x,y,z);
             List<Box> old=cache.get(key);
-            if(old!=null)return old;
+            if(old!=null){
+                reusedBlocks++;
+                return old;
+            }
             if(!loaded(x,z))return Collections.emptyList();
+            decodedBlocks++;
             Block b=world.getBlockAt(x,y,z);
             List<Box> result=new ArrayList<Box>();
             String material=b.getType().name();
@@ -88,6 +145,28 @@ final class VehicleTerrain {
         }
         private static double n(Method m,Object b)throws ReflectiveOperationException{
             return ((Number)m.invoke(b)).doubleValue();
+        }
+
+        /**
+         * Allocation-free presence query: -1 if a required chunk is unloaded,
+         * 0 for clear space, 1 for collision. Used by repeated body clearance
+         * and ground-support probes that do not need a list of Box objects.
+         *
+         * Like collisions(), first validate every covered chunk; never treat
+         * unloaded terrain as empty or permit a movement into it.
+         */
+        int contact(double x0,double y0,double z0,double x1,double y1,double z1){
+            int minX=(int)Math.floor(x0+EPS),maxX=(int)Math.floor(x1-EPS);
+            int minY=(int)Math.floor(y0+EPS),maxY=(int)Math.floor(y1-EPS);
+            int minZ=(int)Math.floor(z0+EPS),maxZ=(int)Math.floor(z1-EPS);
+            boolean touches=false;
+            for(int x=minX;x<=maxX;x++)for(int z=minZ;z<=maxZ;z++){
+                if(!loaded(x,z))return -1;
+                for(int y=minY;y<=maxY;y++)
+                    for(Box box:block(x,y,z))
+                        if(box.intersects(x0,y0,z0,x1,y1,z1))touches=true;
+            }
+            return touches?1:0;
         }
 
         /** Finds colliding shapes; returns false if ANY required chunk is unloaded. */

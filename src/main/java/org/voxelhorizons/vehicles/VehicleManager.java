@@ -23,11 +23,19 @@ public final class VehicleManager {
     private final VehicleStore store;
     private final VehicleRenderer renderer;
     private final VehicleParticles particles;
+    private final VehiclePerformance performance=new VehiclePerformance();
+    private final VehicleOrphanSweep orphanSweep=new VehicleOrphanSweep();
     private VehicleInventories inventories;
     private final Map<UUID,VehicleInstance> instances=new LinkedHashMap<UUID,VehicleInstance>();
+    private final VehicleChunkIndex chunkIndex=new VehicleChunkIndex();
+    // Ray targeting follows the interaction centre, which can be far from
+    // the vehicle's logical origin because of authored model offsets.
+    private final VehicleChunkIndex clickIndex=new VehicleChunkIndex();
     private final Map<UUID,UUID> entityIndex=new HashMap<UUID,UUID>();
     // Dedicated hot path: never scan unloaded or parked instances each server tick.
     private final Map<UUID,VehicleInstance> occupied=new LinkedHashMap<UUID,VehicleInstance>();
+    // Parked/unloaded vehicles without emitters never enter the hot effect loop.
+    private final Map<UUID,VehicleInstance> particleSources=new LinkedHashMap<UUID,VehicleInstance>();
     private Map<ContentID,VehicleDefinition> definitions=Collections.emptyMap();
     private long revision=-1;
     private long ticks;
@@ -43,6 +51,7 @@ public final class VehicleManager {
     void start(){
         refreshDefinitions();
         store.load(instances);
+        for(VehicleInstance v:instances.values())indexChunk(v);
         for(World world:Bukkit.getWorlds())for(Chunk chunk:world.getLoadedChunks())loadChunk(chunk);
         plugin.getServer().getScheduler().runTaskTimer(plugin,new Runnable(){
             @Override public void run(){tick();}
@@ -50,8 +59,12 @@ public final class VehicleManager {
         int cleanupTicks=Math.max(100,plugin.getConfig().getInt("maintenance.cleanup-ticks",600));
         plugin.getServer().getScheduler().runTaskTimer(plugin,new Runnable(){
             @Override public void run(){
-                synchronizeLoaded();
-                cleanupLoadedOrphans();
+                // Maintenance only repairs missing entities. Do NOT rebuild
+                // every healthy mounted ItemDisplay or recreate all item
+                // models every 30 seconds. Explicit /vv sync and VoxelCore
+                // content revision changes still request a full refresh.
+                repairLoaded();
+                scheduleOrphanSweep();
             }
         },cleanupTicks,cleanupTicks);
     }
@@ -75,11 +88,19 @@ public final class VehicleManager {
         }
         definitions=next;
         revision=core.getContentRuntime().current().revision();
+        // Hitbox offsets can change on VoxelCore reload; rebuild target
+        // locations without changing persisted/physics vehicle origins.
+        for(VehicleInstance v:instances.values())indexChunk(v);
         synchronizeLoaded();
     }
 
-    /** Reconciles all currently rendered vehicles with the latest VoxelCore models. */
-    public void synchronizeLoaded(){
+    /** Explicit sync/content reload: reapply models and refresh all rendered vehicles. */
+    public void synchronizeLoaded(){reconcileLoaded(true);}
+
+    /** Periodic maintenance: repair only missing renderers, never refresh healthy mounts. */
+    private void repairLoaded(){reconcileLoaded(false);}
+
+    private void reconcileLoaded(boolean fullRefresh){
         for(VehicleInstance v:instances.values()){
             VehicleDefinition d=definitions.get(v.type);
             if(d==null){
@@ -95,7 +116,7 @@ public final class VehicleManager {
                 try{activate(v,d);}catch(RuntimeException e){
                     plugin.getLogger().warning("Could not repair "+v.id+": "+e.getMessage());
                 }
-            }else{
+            }else if(fullRefresh||missingChestAccessory(v,d)){
                 try{
                     VehicleSuspension.initialize(v,d);
                     deindex(v);
@@ -107,6 +128,21 @@ public final class VehicleManager {
                 }
             }
         }
+    }
+
+    /**
+     * Keep the cheap periodic repair path safe: a separately rendered chest
+     * or its clickable Interaction can disappear while the tractor survives.
+     * In that case a one-off refresh is still required, but healthy vehicles
+     * never recreate their models on maintenance ticks.
+     */
+    static boolean missingChestAccessory(VehicleInstance v,VehicleDefinition d){
+        if(d==null||!d.inventory.chest.enabled||!v.chestInstalled()
+                ||d.inventory.chest.mode!=VehicleChestDefinition.VisualMode.ITEM_DISPLAY)
+            return false;
+        return v.chestDisplay==null||!v.chestDisplay.isValid()
+                || (d.inventory.chest.interaction
+                    &&(v.chestHitbox==null||!v.chestHitbox.isValid()));
     }
 
     /** A success or an actionable placement failure; used by item clicks and admin commands. */
@@ -149,6 +185,7 @@ public final class VehicleManager {
             VehicleInstance v=new VehicleInstance(UUID.randomUUID(),type,owner,where,dyeColor);
             activate(v,d);
             instances.put(v.id,v);
+            indexChunk(v);
             save();
             return SpawnResult.success(v);
         }catch(RuntimeException e){
@@ -167,6 +204,8 @@ public final class VehicleManager {
         // Prevent dropping a vehicle item while deleting its cargo.
         if(v.hasStoredItems()||v.chestInstalled())return false;
         if(instances.remove(v.id)==null)return false;
+        chunkIndex.remove(v.id);
+        clickIndex.remove(v.id);
         if(inventories!=null)inventories.closeFor(v);
         occupied.remove(v.id);
         deindex(v);renderer.deactivate(v);save();return true;
@@ -249,7 +288,9 @@ public final class VehicleManager {
     void loadChunk(Chunk chunk){
         // Clean only stale tagged entities; entityIndex protects our live entities.
         cleanupOrphans(chunk);
-        for(VehicleInstance v:instances.values())if(inChunk(v.location,chunk)){
+        for(UUID id:chunkIndex.inChunk(chunk.getWorld().getUID(),chunk.getX(),chunk.getZ())){
+            VehicleInstance v=instances.get(id);
+            if(v==null||!inChunk(v.location,chunk))continue;
             VehicleDefinition d=definitions.get(v.type);
             if(d==null)continue;
             if(v.display==null||!v.display.isValid()||v.hitbox==null||!v.hitbox.isValid()){
@@ -262,11 +303,33 @@ public final class VehicleManager {
         }
     }
     void unloadChunk(Chunk chunk){
-        for(VehicleInstance v:instances.values())if(v.active()&&inChunk(v.location,chunk)){
+        for(UUID id:chunkIndex.inChunk(chunk.getWorld().getUID(),chunk.getX(),chunk.getZ())){
+            VehicleInstance v=instances.get(id);
+            if(v==null||!v.active()||!inChunk(v.location,chunk))continue;
             occupied.remove(v.id);
             deindex(v);renderer.deactivate(v);
         }
         if(dirty)save();
+    }
+
+    private void scheduleOrphanSweep(){
+        if(orphanSweep.remaining()>0)return;
+        List<Chunk> loaded=new ArrayList<Chunk>();
+        for(World world:Bukkit.getWorlds())
+            Collections.addAll(loaded,world.getLoadedChunks());
+        orphanSweep.schedule(loaded);
+    }
+
+    private void sweepOrphansIncrementally(){
+        int budget=Math.max(1,Math.min(256,plugin.getConfig().getInt(
+                "maintenance.cleanup-chunks-per-tick",16)));
+        orphanSweep.drain(budget,chunk->{
+            // Snapshot chunks may unload while the sweep is in progress.
+            // Never load the chunk to inspect it; ChunkLoadEvent will clean
+            // it if it is loaded again later.
+            if(chunk.getWorld().isChunkLoaded(chunk.getX(),chunk.getZ()))
+                cleanupOrphans(chunk);
+        });
     }
 
     /**
@@ -284,8 +347,13 @@ public final class VehicleManager {
     int cleanupOrphans(Chunk chunk){
         int removed=0;
         for(Entity entity:chunk.getEntities()){
-            if(entity.getScoreboardTags().contains("voxelvehicles")
-                    &&!entityIndex.containsKey(entity.getUniqueId())){
+            // Most chunk entities (players, items, mobs) cannot be ours.
+            // Avoid scoreboard-tag lookup and allocations for those types.
+            String type=entity.getType().name();
+            if(!type.equals("ITEM_DISPLAY")&&!type.equals("INTERACTION")
+                    &&!type.equals("ARMOR_STAND"))continue;
+            if(entityIndex.containsKey(entity.getUniqueId()))continue;
+            if(entity.getScoreboardTags().contains("voxelvehicles")){
                 entity.remove();
                 removed++;
             }
@@ -299,8 +367,13 @@ public final class VehicleManager {
         Vector ray=eye.getDirection().normalize();
         VehicleInstance nearest=null;
         double best=reach;
-        for(VehicleInstance v:instances.values()){
-            if(!v.active()||v.driver!=null||!v.location.getWorld().equals(eye.getWorld()))continue;
+        // Hitboxes can extend up to 8 blocks beyond their centres.
+        // Index the authored HITBOX centre, not the distant model origin.
+        for(UUID id:clickIndex.nearby(eye.getWorld().getUID(),
+                eye.getX(),eye.getZ(),reach+8.0)){
+            VehicleInstance v=instances.get(id);
+            if(v==null||!v.active()||v.driver!=null
+                    ||!v.location.getWorld().equals(eye.getWorld()))continue;
             VehicleDefinition d=definitions.get(v.type);
             if(d==null)continue;
             Location center=VehicleTransform.hitbox(v.location,d);
@@ -333,7 +406,24 @@ public final class VehicleManager {
         renderer.activate(v,d);
         index(v);
     }
+    private void indexChunk(VehicleInstance v){
+        if(v.location.getWorld()==null)return;
+        UUID world=v.location.getWorld().getUID();
+        chunkIndex.update(v.id,world,v.location.getX(),v.location.getZ());
+        VehicleDefinition definition=definitions.get(v.type);
+        if(definition==null){
+            clickIndex.remove(v.id);
+        }else{
+            Location centre=VehicleTransform.hitbox(v.location,definition);
+            clickIndex.update(v.id,world,centre.getX(),centre.getZ());
+        }
+    }
+
     private void index(VehicleInstance v){
+        VehicleDefinition definition=definitions.get(v.type);
+        if(v.active()&&definition!=null&&!definition.particles.isEmpty())
+            particleSources.put(v.id,v);
+        else particleSources.remove(v.id);
         if(v.display!=null)entityIndex.put(v.display.getUniqueId(),v.id);
         if(v.hitbox!=null)entityIndex.put(v.hitbox.getUniqueId(),v.id);
         if(v.seat!=null)entityIndex.put(v.seat.getUniqueId(),v.id);
@@ -341,6 +431,7 @@ public final class VehicleManager {
         if(v.chestHitbox!=null)entityIndex.put(v.chestHitbox.getUniqueId(),v.id);
     }
     private void deindex(VehicleInstance v){
+        particleSources.remove(v.id);
         if(v.display!=null)entityIndex.remove(v.display.getUniqueId());
         if(v.hitbox!=null)entityIndex.remove(v.hitbox.getUniqueId());
         if(v.seat!=null)entityIndex.remove(v.seat.getUniqueId());
@@ -353,12 +444,18 @@ public final class VehicleManager {
     }
 
     private void tick(){
+        long started=System.nanoTime();
+        int sent=0,avoided=0;
         if(core.getContentRuntime().current().revision()!=revision) {
             try{refreshDefinitions();}catch(RuntimeException e){
                 plugin.getLogger().warning("Vehicle definitions reload rejected: "+e.getMessage());
                 revision=core.getContentRuntime().current().revision();
             }
         }
+        // One shape snapshot per world and server tick, shared between all
+        // riders. Previously each vehicle reparsed the same terrain blocks.
+        VehicleTerrain.Frame terrainFrame=new VehicleTerrain.Frame();
+        double maxStep=Math.max(0.05,plugin.getConfig().getDouble("physics.max-substep",0.25));
         for(Iterator<VehicleInstance> iter=occupied.values().iterator();iter.hasNext();){
             VehicleInstance v=iter.next();
             if(!v.active()||v.driver==null){iter.remove();continue;}
@@ -372,11 +469,10 @@ public final class VehicleManager {
             }
             VehicleDefinition d=definitions.get(v.type);
             if(d==null){deindex(v);renderer.unseat(v,d);index(v);iter.remove();continue;}
-            // One collision-shape snapshot per occupied vehicle/tick. The
-            // physical body is ground-relative, independent of model offsets.
-            VehicleTerrain.Space terrain=new VehicleTerrain.Space(v.location.getWorld());
+            // All vehicles in this world reuse decoded shapes within the
+            // current tick only. Edits become visible on the following tick.
+            VehicleTerrain.Space terrain=terrainFrame.space(v.location.getWorld());
             Location old=v.location;
-            double maxStep=Math.max(0.05,plugin.getConfig().getDouble("physics.max-substep",0.25));
             Location next;
             if(d.type==VehicleDefinition.Type.PLANE){
                 VehiclePhysics.advance(v.motion,d,v.input);
@@ -420,6 +516,7 @@ public final class VehicleManager {
             next.setYaw(v.motion.yaw);
             if(!old.equals(next)){
                 v.location=next;
+                indexChunk(v);
                 dirty=true;
                 renderer.move(v,d);
                 if(v.driver==null){
@@ -430,12 +527,27 @@ public final class VehicleManager {
             // visual model changes, never the passenger or hitbox orientation.
             if(v.driver!=null&&VehicleSuspension.update(v,d,terrain))
                 renderer.updateTilt(v,d);
+            long teleportCounts=v.teleports.drainCounts();
+            sent+=(int)(teleportCounts>>>32);
+            avoided+=(int)teleportCounts;
         }
+        // Bound maintenance cost, even if hundreds of players have loaded
+        // thousands of chunks. Manual /vv cleanup remains a full sweep.
+        sweepOrphansIncrementally();
         // Effects use the same single server tick: no per-vehicle timers or entities.
-        particles.tick(instances.values(),definitions,ticks);
+        particles.tick(particleSources.values(),definitions,ticks);
         int interval=Math.max(20,plugin.getConfig().getInt("physics.autosave-ticks",200));
         if(++ticks%interval==0&&dirty)save();
+        performance.record(System.nanoTime()-started,occupied.size(),
+                terrainFrame.decodedBlocks(),terrainFrame.reusedBlocks(),sent,avoided);
     }
+
+    String[] performanceReport(){
+        int active=0;
+        for(VehicleInstance v:instances.values())if(v.active())active++;
+        return performance.lines(active,instances.size());
+    }
+
     public void save(){
         if(inventories!=null)inventories.captureOpen();
         try{store.save(instances);dirty=false;}catch(IOException e){plugin.getLogger().severe("Vehicle save failed: "+e.getMessage());}
@@ -444,6 +556,7 @@ public final class VehicleManager {
         if(inventories!=null)inventories.shutdown();
         save();
         for(VehicleInstance v:instances.values())renderer.deactivate(v);
-        occupied.clear();entityIndex.clear();
+        occupied.clear();particleSources.clear();entityIndex.clear();
+        chunkIndex.clear();clickIndex.clear();
     }
 }

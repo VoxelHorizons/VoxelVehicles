@@ -74,8 +74,12 @@ final class VehicleCommand implements CommandExecutor,TabCompleter {
             return true;
         }
         if(!sender.hasPermission("voxelvehicles.admin")){sender.sendMessage("§cNo permission.");return true;}
-        if(args.length==0){sender.sendMessage("§7/vv <inventory|chest remove|list|spawn <namespace:id>|remove|reload|cleanup|sync>");return true;}
+        if(args.length==0){sender.sendMessage("§7/vv <inventory|chest remove|perf|list|spawn <namespace:id>|remove|reload|cleanup|sync>");return true;}
         String action=args[0].toLowerCase(Locale.ROOT);
+        if("perf".equals(action)){
+            for(String message:vehicles.performanceReport())sender.sendMessage(message);
+            return true;
+        }
         if("list".equals(action)){
             sender.sendMessage("§6VoxelVehicles: §f"+vehicles.definitions().keySet());return true;
         }
@@ -135,7 +139,7 @@ final class VehicleCommand implements CommandExecutor,TabCompleter {
             return Collections.emptyList();
         }
         List<String> out=new ArrayList<String>();
-        if(args.length==1)out.addAll(Arrays.asList("inventory","chest","list","spawn","remove","reload","cleanup","sync"));
+        if(args.length==1)out.addAll(Arrays.asList("inventory","chest","perf","list","spawn","remove","reload","cleanup","sync"));
         else if(args.length==2&&"chest".equalsIgnoreCase(args[0]))out.add("remove");
         else if(args.length==2&&"spawn".equalsIgnoreCase(args[0]))
             for(ContentID id:vehicles.definitions().keySet())out.add(id.toString());

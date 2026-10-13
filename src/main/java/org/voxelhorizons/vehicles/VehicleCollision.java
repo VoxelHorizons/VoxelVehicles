@@ -48,9 +48,10 @@ final class VehicleCollision {
     static boolean clear(Location where,VehicleDefinition d,VehicleTerrain.Space space){
         Body body=new Body(where,d);
         if(!boundsValid(where.getWorld(),body))return false;
-        List<VehicleTerrain.Box> overlaps=new ArrayList<VehicleTerrain.Box>();
-        return space.collisions(body.x0,body.y0,body.z0,body.x1,body.y1,body.z1,overlaps)
-                &&overlaps.isEmpty();
+        // Hot path: no temporary List allocation or boxing of collisions.
+        // Tri-state preserves unloaded-chunk rejection.
+        return space.contact(body.x0,body.y0,body.z0,
+                body.x1,body.y1,body.z1)==0;
     }
 
     static String blockedReason(Location where,VehicleDefinition d){
@@ -76,10 +77,9 @@ final class VehicleCollision {
         Location probe=where.clone().add(0,-0.06,0);
         Body body=new Body(probe,d);
         if(!boundsValid(where.getWorld(),body))return false;
-        List<VehicleTerrain.Box> contacts=new ArrayList<VehicleTerrain.Box>();
-        // A missing chunk is NOT a support surface.
-        return space.collisions(body.x0,body.y0,body.z0,
-                body.x1,body.y1,body.z1,contacts) && !contacts.isEmpty();
+        // A missing chunk is NOT a support surface; 1 means a real contact.
+        return space.contact(body.x0,body.y0,body.z0,
+                body.x1,body.y1,body.z1)==1;
     }
 
     static final class FallResult {
