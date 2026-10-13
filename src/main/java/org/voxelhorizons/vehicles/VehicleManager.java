@@ -598,9 +598,20 @@ public final class VehicleManager {
     }
 
     String[] performanceReport(){
-        int active=0;
-        for(VehicleInstance v:instances.values())if(v.active())active++;
-        return performance.lines(active,instances.size());
+        int active=0,accessories=0,attached=0;
+        for(VehicleInstance v:instances.values()){
+            if(!v.active())continue;
+            active++;
+            if(v.chestDisplay!=null&&v.chestDisplay.isValid()){
+                accessories++;
+                if(VehicleChestMount.attached(v))attached++;
+            }
+        }
+        String[] base=performance.lines(active,instances.size());
+        String[] output=Arrays.copyOf(base,base.length+1);
+        output[base.length]="§fChest displays mounted: §a"+attached+"§f / §e"+accessories
+                +" §7(other displays use independent teleport fallback)";
+        return output;
     }
 
     public void save(){
