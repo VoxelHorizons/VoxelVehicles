@@ -41,8 +41,8 @@ public class VehicleChestMountTest {
                                 passengers.add(child);
                                 // In this harness, the player and display proxies
                                 // are the only entities we create.
-                                if(child==accessory.entity)accessory.vehicle=entity;
-                                if(child==rider.entity)rider.vehicle=entity;
+                                if(child==accessory.entity)accessory.vehicle=(Entity)proxy;
+                                if(child==rider.entity)rider.vehicle=(Entity)proxy;
                                 return true;
                             case "removePassenger":
                                 removeCalls++;
