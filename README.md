@@ -787,3 +787,23 @@ teleports if a particular server/client cannot render passenger displays.
 Verify in-game by driving and steering both directions, including tight
 turns and 0°/360° yaw crossings, then driving on sloped terrain. Test the
 chest's physical mounting position and clicking the separate hitbox.
+
+## Original vehicle item metadata on pickup
+
+Vehicle placement now preserves a **single-item clone of the actual VoxelCore
+item held by the player** in `vehicles.yml` (format 4). Picking the vehicle
+back up returns the original custom item identity, inherited/derived name,
+lore, custom model/components and any other Bukkit ItemMeta, rather than
+reconstructing `vehicle.drop` (which might refer to a generic parent item).
+
+This also survives server restarts and chunk unloading. If an existing
+vehicle was placed before this change and has no saved `original-item`,
+pickup rebuilds `vehicle.type` (the concrete vehicle ID, e.g.
+`voxel:yellow_tractor`) and reapplies its separately saved color, rather
+than returning the parent/model drop. The rebuilt item reflects the current
+VoxelCore item definition; pre-upgrade metadata that was never saved
+cannot be recovered exactly.
+
+The chest and all storage stacks continue dropping separately, as in
+PR #13. New source metadata is a defensive clone and is never changed by
+the player's remaining stack, inventory, or chest modifications.
