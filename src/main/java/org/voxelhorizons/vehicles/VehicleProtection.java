@@ -8,10 +8,6 @@ import com.sk89q.worldguard.protection.flags.StateFlag;
 import com.sk89q.worldguard.protection.flags.registry.FlagConflictException;
 import com.sk89q.worldguard.protection.flags.registry.FlagRegistry;
 import com.sk89q.worldguard.protection.regions.RegionQuery;
-import me.angeschossen.lands.api.LandsIntegration;
-import me.angeschossen.lands.api.flags.type.Flags;
-import me.angeschossen.lands.api.flags.type.RoleFlag;
-import me.angeschossen.lands.api.land.LandWorld;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -24,7 +20,7 @@ public final class VehicleProtection {
 
     private final boolean worldGuard;
     private final boolean landsEnabled;
-    private final LandsIntegration lands;
+    private final LandsHook lands;
 
     public static void registerWorldGuardFlags(JavaPlugin plugin) {
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null
@@ -44,7 +40,7 @@ public final class VehicleProtection {
     public boolean allows(Player player, Location at, Action action) {
         if (player == null || at == null || at.getWorld() == null) return false;
         if (worldGuard && !WorldGuardHook.allows(player, at, action)) return false;
-        return !landsEnabled || LandsHook.allows(lands, player, at, action);
+        return !landsEnabled || lands.allows(player, at, action);
     }
 
     /** Cancelled events are eligible for recovery only if a custom region flag grants it. */
@@ -110,24 +106,72 @@ public final class VehicleProtection {
         }
     }
 
+    /**
+     * Late-bound public Lands API. The Lands Maven artifact is not publicly
+     * resolvable on all build runners; an isolated runtime hook retains a
+     * genuine Lands role check without bundling or shading their classes.
+     * A changed/incompatible API fails closed instead of granting access.
+     */
     private static final class LandsHook {
-        private static LandsIntegration connect(JavaPlugin plugin) {
-            return LandsIntegration.of(plugin);
+        private final JavaPlugin plugin;
+        private final Object api;
+        private final java.lang.reflect.Method getWorld;
+        private final java.lang.reflect.Method getLandPlayer;
+        private final java.lang.reflect.Method hasRoleFlag;
+        private final java.util.Map<String,Object> flags = new java.util.HashMap<String,Object>();
+        private boolean warned;
+
+        private LandsHook(JavaPlugin plugin) throws ReflectiveOperationException {
+            this.plugin = plugin;
+            ClassLoader loader = Bukkit.getPluginManager().getPlugin("Lands").getClass().getClassLoader();
+            Class<?> integration = Class.forName("me.angeschossen.lands.api.LandsIntegration", true, loader);
+            Class<?> landWorld = Class.forName("me.angeschossen.lands.api.land.LandWorld", true, loader);
+            Class<?> landPlayer = Class.forName("me.angeschossen.lands.api.player.LandPlayer", true, loader);
+            Class<?> flagClass = Class.forName("me.angeschossen.lands.api.flags.type.RoleFlag", true, loader);
+            Class<?> registry = Class.forName("me.angeschossen.lands.api.flags.type.Flags", true, loader);
+            api = integration.getMethod("of", org.bukkit.plugin.Plugin.class).invoke(null, plugin);
+            getWorld = integration.getMethod("getWorld", org.bukkit.World.class);
+            getLandPlayer = integration.getMethod("getLandPlayer", java.util.UUID.class);
+            hasRoleFlag = landWorld.getMethod("hasRoleFlag", landPlayer, Location.class,
+                    flagClass, Material.class, boolean.class);
+            for (String key : new String[] {"BLOCK_PLACE", "BLOCK_BREAK",
+                    "INTERACT_CONTAINER", "INTERACT_GENERAL", "VEHICLE_USE"}) {
+                flags.put(key, registry.getField(key).get(null));
+            }
         }
 
-        private static boolean allows(LandsIntegration api, Player player, Location at, Action action) {
-            LandWorld world = api.getWorld(at.getWorld());
-            if (world == null) return true;
-            RoleFlag flag;
-            switch (action) {
-                case PLACE:
-                case MODIFY: flag = Flags.BLOCK_PLACE; break;
-                case BREAK: flag = Flags.BLOCK_BREAK; break;
-                case INVENTORY: flag = Flags.INTERACT_CONTAINER; break;
-                default: flag = Flags.VEHICLE_USE; break;
+        private static LandsHook connect(JavaPlugin plugin) {
+            try {
+                return new LandsHook(plugin);
+            } catch (ReflectiveOperationException | LinkageError error) {
+                throw new IllegalStateException("Cannot initialize installed Lands API safely", error);
             }
-            Material material = action == Action.INVENTORY ? Material.CHEST : null;
-            return world.hasRoleFlag(api.getLandPlayer(player.getUniqueId()), at, flag, material, false);
+        }
+
+        private boolean allows(Player player, Location at, Action action) {
+            String flagName;
+            switch (action) {
+                case PLACE: flagName = "BLOCK_PLACE"; break;
+                case BREAK: flagName = "BLOCK_BREAK"; break;
+                case MODIFY: flagName = "BLOCK_PLACE"; break;
+                case INVENTORY: flagName = "INTERACT_CONTAINER"; break;
+                case INTERACT: flagName = "VEHICLE_USE"; break;
+                default: return false;
+            }
+            try {
+                Object world = getWorld.invoke(api, at.getWorld());
+                if (world == null) return true; // not a managed Lands world
+                Object landPlayer = getLandPlayer.invoke(api, player.getUniqueId());
+                Object state = hasRoleFlag.invoke(world, landPlayer, at, flags.get(flagName),
+                        action == Action.INVENTORY ? Material.CHEST : null, Boolean.FALSE);
+                return Boolean.TRUE.equals(state);
+            } catch (ReflectiveOperationException | LinkageError error) {
+                if (!warned) {
+                    warned = true;
+                    plugin.getLogger().warning("Lands API check failed (denying action): " + error);
+                }
+                return false;
+            }
         }
     }
 }
