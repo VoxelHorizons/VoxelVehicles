@@ -27,6 +27,9 @@ public final class VehicleInstance {
     public VehiclePhysics.Input input=VehiclePhysics.Input.NEUTRAL;
     /** Logical per-vehicle cargo, saved independently from display entities. */
     final ItemStack[] storage=new ItemStack[54];
+    /** Full original single vehicle item (custom ID, name, lore, components).
+     * Persisted separately from any installed chest or storage cargo. */
+    ItemStack originalItem;
     /** The original upgrade ItemStack is returned when the chest is detached. */
     ItemStack installedChest;
     boolean chestInstalled(){return installedChest!=null&&installedChest.getAmount()>0;}

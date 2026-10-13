@@ -46,6 +46,19 @@ final class VehicleStore {
                     color=Integer.valueOf(rgb);
                 }
                 VehicleInstance vehicle=new VehicleInstance(id,type,owner,new Location(world,x,y,z,yaw,0),color);
+                // Absent on format <=3: pickup rebuilds the correct concrete
+                // vehicle type instead of the generic model/drop parent.
+                ItemStack original=section.getItemStack(key+".original-item");
+                if(original!=null){
+                    try{vehicle.originalItem=VehiclePickupItem.capture(original);}
+                    catch(IllegalArgumentException invalid){
+                        // A damaged original-item field must never destroy the
+                        // entire parked vehicle or its independent cargo.
+                        Bukkit.getLogger().warning("[VoxelVehicles] Invalid original item for "
+                                +id+"; will reconstruct its concrete type at pickup: "
+                                +invalid.getMessage());
+                    }
+                }
                 ItemStack attachedChest=section.getItemStack(key+".installed-chest");
                 if(attachedChest!=null&&attachedChest.getAmount()>0)
                     vehicle.installedChest=attachedChest.clone();
@@ -65,12 +78,14 @@ final class VehicleStore {
 
     void save(Map<UUID,VehicleInstance> vehicles) throws IOException{
         YamlConfiguration config=new YamlConfiguration();
-        config.set("format",3);
+        config.set("format",4);
         for(VehicleInstance v:vehicles.values()){
             String k="vehicles."+v.id+".";
             config.set(k+"type",v.type.toString());
             config.set(k+"owner",v.owner.toString());
             if(v.dyeColor!=null)config.set(k+"color",v.dyeColor);
+            if(v.originalItem!=null)config.set(k+"original-item",
+                    VehiclePickupItem.capture(v.originalItem));
             if(v.chestInstalled())config.set(k+"installed-chest",v.installedChest.clone());
             config.set(k+"world",v.location.getWorld().getName());
             config.set(k+"x",v.location.getX());config.set(k+"y",v.location.getY());
