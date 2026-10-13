@@ -11,17 +11,17 @@ final class VehicleChestDefinition {
     final boolean enabled;
     final Material item;
     final VisualMode mode;
-    final ContentID visualItem,alternateModel;
+    final ContentID visualItem,alternateModel,previewItem;
     final double x,y,z,scale,yaw;
     final boolean followTilt,interaction,attachToVehicle;
     final double clickWidth,clickHeight;
 
     private VehicleChestDefinition(boolean enabled,Material item,VisualMode mode,
-            ContentID visualItem,ContentID alternateModel,
+            ContentID visualItem,ContentID alternateModel,ContentID previewItem,
             double x,double y,double z,double scale,double yaw,boolean followTilt,
             boolean interaction,boolean attachToVehicle,double clickWidth,double clickHeight){
         this.enabled=enabled;this.item=item;this.mode=mode;
-        this.visualItem=visualItem;this.alternateModel=alternateModel;
+        this.visualItem=visualItem;this.alternateModel=alternateModel;this.previewItem=previewItem;
         this.x=x;this.y=y;this.z=z;this.scale=scale;this.yaw=yaw;
         this.followTilt=followTilt;this.interaction=interaction;
         this.attachToVehicle=attachToVehicle;
@@ -30,11 +30,11 @@ final class VehicleChestDefinition {
 
     static VehicleChestDefinition parse(ContentID owner,Object raw){
         if(raw==null)return new VehicleChestDefinition(false,Material.CHEST,
-                VisualMode.NONE,null,null,0,0,0,1,0,false,false,false,0.8,0.8);
+                VisualMode.NONE,null,null,null,0,0,0,1,0,false,false,false,0.8,0.8);
         Map<?,?> m=mapping(owner,raw,"chest");
         // Legacy chest.slot is intentionally ignored: there is no GUI button.
         // Accept older YAML so existing worlds don't fail plugin startup.
-        keys(owner,m,"chest","enabled","item","slot","visual");
+        keys(owner,m,"chest","enabled","item","slot","preview_item","visual");
         Object enable=m.get("enabled");
         if(enable!=null&&!(enable instanceof Boolean))
             throw bad(owner,"chest.enabled must be boolean");
@@ -54,6 +54,7 @@ final class VehicleChestDefinition {
         catch(IllegalArgumentException e){throw bad(owner,"chest.visual.mode must be NONE, ITEM_DISPLAY or MODEL_SWAP");}
         ContentID itemId=optionalId(owner,visual.get("item"),"chest.visual.item");
         ContentID alternative=optionalId(owner,visual.get("model_item"),"chest.visual.model_item");
+        ContentID preview=optionalId(owner,m.get("preview_item"),"chest.preview_item");
         if(enabled&&mode==VisualMode.MODEL_SWAP&&alternative==null)
             throw bad(owner,"chest.visual.model_item is required for MODEL_SWAP");
         Map<?,?> offset=mapping(owner,visual.get("offset"),"chest.visual.offset");
@@ -61,7 +62,7 @@ final class VehicleChestDefinition {
         boolean tilt=bool(owner,visual,"follow_tilt",true);
         boolean interaction=bool(owner,visual,"interaction",true);
         boolean attach=bool(owner,visual,"attach_to_vehicle",true);
-        return new VehicleChestDefinition(enabled,material,mode,itemId,alternative,
+        return new VehicleChestDefinition(enabled,material,mode,itemId,alternative,preview,
                 number(owner,offset,"x",0,-16,16),
                 number(owner,offset,"y",0,-16,16),
                 number(owner,offset,"z",0,-16,16),
