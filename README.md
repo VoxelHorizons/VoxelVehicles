@@ -629,8 +629,15 @@ While no chest is installed, the menu continues to render
 Once the chest is installed, the menu renders `chest.preview_item`
 regardless of the chest's visual mode. Detaching the chest reverts the
 preview on the next inventory open. The icon receives the vehicle's stored
-dye color exactly as the original preview did, and the invisible filler
-continues copying the selected preview's hover title and lore. If the
+dye color exactly as the original preview did. Its hover name, lore,
+enchantments/glint, item flags and unbreakable presentation now come from
+the **original placed vehicle ItemStack**, saved in `vehicles.yml` (PR #16),
+not the generic `tractor_icon` or `tractor_chest_icon` definition.
+The preview keeps its own render identity/model and structured custom model
+data, and the invisible filler copies the resulting name/lore. For vehicles
+saved before `original-item` existed, the plugin reconstructs the concrete
+vehicle type (and stored dye) as it does for pickup, rather than using the
+configured generic model/drop item. If the
 optional `chest.preview_item` is omitted, existing menus behave exactly
 as before. The chest visual's `model_item` and this GUI-only preview are
 independent.
