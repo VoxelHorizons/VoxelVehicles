@@ -49,7 +49,16 @@ final class VehicleStore {
                 // Absent on format <=3: pickup rebuilds the correct concrete
                 // vehicle type instead of the generic model/drop parent.
                 ItemStack original=section.getItemStack(key+".original-item");
-                if(original!=null)vehicle.originalItem=VehiclePickupItem.capture(original);
+                if(original!=null){
+                    try{vehicle.originalItem=VehiclePickupItem.capture(original);}
+                    catch(IllegalArgumentException invalid){
+                        // A damaged original-item field must never destroy the
+                        // entire parked vehicle or its independent cargo.
+                        Bukkit.getLogger().warning("[VoxelVehicles] Invalid original item for "
+                                +id+"; will reconstruct its concrete type at pickup: "
+                                +invalid.getMessage());
+                    }
+                }
                 ItemStack attachedChest=section.getItemStack(key+".installed-chest");
                 if(attachedChest!=null&&attachedChest.getAmount()>0)
                     vehicle.installedChest=attachedChest.clone();
