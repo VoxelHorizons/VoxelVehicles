@@ -22,10 +22,6 @@ public final class VehicleInstance {
     public boolean linkedSeat;
     /** Accessory passenger state; avoid failed addPassenger calls every tick. */
     boolean chestPassengerLinked,chestPassengerAttempted;
-    /** Chest's yaw when it joined the vehicle; a stable local rotation basis. */
-    float chestPassengerYawBasis;
-    /** Last local yaw transform sent; avoids re-arming interpolation while idle. */
-    float chestLastMatrixYaw=Float.NaN;
     /** Cosmetic terrain suspension only; never rotates the physical hitbox or rider. */
     public double visualPitch,visualRoll;
     public VehiclePhysics.Input input=VehiclePhysics.Input.NEUTRAL;
