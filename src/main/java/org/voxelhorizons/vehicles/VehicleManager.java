@@ -49,6 +49,8 @@ public final class VehicleManager {
         this.store=new VehicleStore(new File(plugin.getDataFolder(),"vehicles.yml"));
     }
 
+    VehicleProtection protection(){ return plugin.protection(); }
+
     void start(){
         refreshDefinitions();
         store.load(instances);
@@ -324,6 +326,7 @@ public final class VehicleManager {
     public boolean mount(VehicleInstance v,Player p){
         VehicleDefinition d=definitions.get(v.type);
         if(d==null||!v.active()||v.driver!=null||p.isInsideVehicle())return false;
+        if(!plugin.protection().allows(p,v.location,VehicleProtection.Action.INTERACT))return false;
         if(!d.publicAccess&&!v.owner.equals(p.getUniqueId())&&!p.hasPermission("voxelvehicles.admin"))return false;
         if(!renderer.seat(v,d,p))return false;
         index(v);

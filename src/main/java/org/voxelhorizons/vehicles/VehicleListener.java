@@ -33,6 +33,7 @@ final class VehicleListener implements Listener {
     private final VoxelVehicles plugin;
     private final VehicleManager vehicles;
     private final VoxelCore core;
+    private final VehicleProtection protection;
     // Right-clicks can also emit hand animations on some client versions.
     // Tracking right-click intent prevents those swings from claiming a vehicle.
     private final Map<UUID,Long> recentRightClicks=new HashMap<UUID,Long>();
@@ -52,9 +53,10 @@ final class VehicleListener implements Listener {
     }
     VehicleListener(VoxelVehicles plugin,VehicleManager vehicles,VoxelCore core) {
         this.plugin=plugin;this.vehicles=vehicles;this.core=core;
+        this.protection=plugin.protection();
     }
 
-    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
+    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=false)
     public void place(PlayerInteractEvent event){
         if(event.getHand()!=EquipmentSlot.HAND||event.getAction()!=Action.RIGHT_CLICK_BLOCK)return;
         Player player=event.getPlayer();
@@ -62,6 +64,11 @@ final class VehicleListener implements Listener {
         Optional<ContentID> id=core.getItemManager().identify(hand);
         if(!id.isPresent()||!vehicles.definition(id.get()).isPresent())return;
         Location target=event.getClickedBlock().getRelative(event.getBlockFace()).getLocation().add(0.5,0,0.5);
+        if(event.useItemInHand()==org.bukkit.event.Event.Result.ALLOW)return;
+        if(event.isCancelled()&&!protection.explicitWorldGuardAllow(player,target,VehicleProtection.Action.PLACE))return;
+        if(!protection.allows(player,target,VehicleProtection.Action.PLACE)){
+            event.setCancelled(true);return;
+        }
         target.setYaw(player.getLocation().getYaw());
         VehicleManager.SpawnResult result=vehicles.trySpawn(id.get(),player.getUniqueId(),target,hand);
         if(!result.successful()){
@@ -81,6 +88,7 @@ final class VehicleListener implements Listener {
         VehicleInstance v=vehicles.byEntity(event.getRightClicked()).orElse(null);
         if(v==null)return;
         Player player=event.getPlayer();
+        boolean cancelledBefore=event.isCancelled();
         markRightClick(player);
         event.setCancelled(true);
         // Some server versions dispatch interact, interactAt and fallback for
@@ -89,6 +97,10 @@ final class VehicleListener implements Listener {
         if(suppressChestInstallFollowup(player,v))return;
         VehicleDefinition d=vehicles.definition(v.type).orElse(null);
         if(d==null)return;
+        VehicleProtection.Action use=isChestAccessory(v,event.getRightClicked())
+                ||player.isSneaking()?VehicleProtection.Action.INVENTORY:VehicleProtection.Action.INTERACT;
+        if(cancelledBefore&&!protection.explicitWorldGuardAllow(player,v.location,use))return;
+        if(!protection.allows(player,v.location,use))return;
         if(!d.publicAccess&&!v.owner.equals(player.getUniqueId())
                 &&!player.hasPermission("voxelvehicles.admin")){
             player.sendMessage("§cYou cannot modify this vehicle.");return;
@@ -135,6 +147,7 @@ final class VehicleListener implements Listener {
         markRightClick(player);
         event.setCancelled(true);
         if(suppressChestInstallFollowup(player,v))return;
+        if(!protection.allows(player,v.location,VehicleProtection.Action.INVENTORY))return;
         if(!tryInstallChest(v,player))openInventory(player,v);
     }
 
@@ -163,6 +176,9 @@ final class VehicleListener implements Listener {
         // The same-click install guard above distinguishes this case from
         // the second event dispatched after a fresh installation.
         if(vehicle.chestInstalled())return false;
+        if(!protection.allows(player,vehicle.location,VehicleProtection.Action.MODIFY)){
+            player.sendMessage("§cYou cannot modify vehicles in this region.");return true;
+        }
         rememberChestInstallClick(player,vehicle);
         if(!vehicle.owner.equals(player.getUniqueId())
                 &&!player.hasPermission("voxelvehicles.admin")){
@@ -181,6 +197,7 @@ final class VehicleListener implements Listener {
 
     // A deliberate LEFT click on the chest accessory detaches it when empty.
     private void detachChest(VehicleInstance vehicle,Player player){
+        if(!protection.allows(player,vehicle.location,VehicleProtection.Action.BREAK))return;
         if(!vehicle.owner.equals(player.getUniqueId())
                 &&!player.hasPermission("voxelvehicles.admin")){
             player.sendMessage("§cOnly the owner can remove this chest.");return;
@@ -302,6 +319,7 @@ final class VehicleListener implements Listener {
     }
 
     private void collect(VehicleInstance v,Player player){
+        if(!protection.allows(player,v.location,VehicleProtection.Action.BREAK))return;
         if(v.driver!=null||suppressPickup(player))return;
         if(!v.owner.equals(player.getUniqueId())
                 &&!player.hasPermission("voxelvehicles.admin"))return;

@@ -58,6 +58,9 @@ final class VehicleCommand implements CommandExecutor,TabCompleter {
             if(definition==null||!definition.inventory.chest.enabled||!target.chestInstalled()){
                 player.sendMessage("§cThat vehicle has no installed chest.");return true;
             }
+            if(!vehicles.protection().allows(player,target.location,VehicleProtection.Action.BREAK)){
+                player.sendMessage("§cCannot modify vehicle storage in this region.");return true;
+            }
             if(!target.owner.equals(player.getUniqueId())
                     &&!player.hasPermission("voxelvehicles.admin")){
                 player.sendMessage("§cOnly the owner can remove this chest.");return true;
