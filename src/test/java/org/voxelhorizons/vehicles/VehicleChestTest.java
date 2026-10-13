@@ -59,6 +59,61 @@ public class VehicleChestTest {
         instance.installedChest=null;
         assertEquals(0,d.effectiveStorageRows(instance));
     }
+    @Test public void chestPreviewChangesWithAttachmentAndReturnsOnDetach(){
+        Map<String,Object> config=new HashMap<String,Object>();
+        config.put("enabled",true);
+        config.put("rows",3);
+        config.put("preview_item","voxel:tractor_icon");
+        Map<String,Object> upgrade=chest("MODEL_SWAP");
+        upgrade.put("preview_item","voxel:tractor_chest_icon");
+        config.put("chest",upgrade);
+        VehicleInventoryDefinition definition=VehicleInventoryDefinition.parse(tractor,config);
+        VehicleInstance vehicle=instance();
+        ContentID standard=ContentID.of("voxel","tractor_icon");
+        ContentID withChest=ContentID.of("voxel","tractor_chest_icon");
+        assertEquals(standard,definition.previewFor(vehicle,tractor));
+        vehicle.installedChest=new ItemStack(Material.CHEST,1);
+        assertEquals(withChest,definition.previewFor(vehicle,tractor));
+        vehicle.installedChest=null;
+        assertEquals(standard,definition.previewFor(vehicle,tractor));
+    }
+
+    @Test public void chestPreviewIsIndependentOfVisualMode(){
+        for(String mode:Arrays.asList("ITEM_DISPLAY","MODEL_SWAP","NONE")){
+            Map<String,Object> upgrade=chest(mode);
+            upgrade.put("preview_item","voxel:tractor_chest_icon");
+            VehicleInventoryDefinition definition=inventory(upgrade);
+            VehicleInstance vehicle=instance();
+            vehicle.installedChest=new ItemStack(Material.CHEST,1);
+            assertEquals(ContentID.of("voxel","tractor_chest_icon"),
+                    definition.previewFor(vehicle,tractor));
+            vehicle.installedChest=null;
+            assertEquals(tractor,definition.previewFor(vehicle,tractor));
+        }
+    }
+
+    @Test public void chestPreviewFallsBackWhenNotConfiguredOrDisabled(){
+        VehicleInstance vehicle=instance();
+        vehicle.installedChest=new ItemStack(Material.CHEST,1);
+        VehicleInventoryDefinition withoutUpgrade=inventory(chest("MODEL_SWAP"));
+        assertEquals(tractor,withoutUpgrade.previewFor(vehicle,tractor));
+        Map<String,Object> config=new HashMap<String,Object>();
+        Map<String,Object> disabled=chest("NONE");
+        disabled.put("enabled",false);
+        disabled.put("preview_item","voxel:tractor_chest_icon");
+        config.put("preview_item","voxel:tractor_icon");
+        config.put("chest",disabled);
+        VehicleInventoryDefinition definition=VehicleInventoryDefinition.parse(tractor,config);
+        assertEquals(ContentID.of("voxel","tractor_icon"),definition.previewFor(vehicle,tractor));
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void rejectInvalidChestPreviewItem(){
+        Map<String,Object> invalid=chest("NONE");
+        invalid.put("preview_item",54);
+        inventory(invalid);
+    }
+
     @Test public void accessoryPositionFollowsRotationAndVisualOffset(){
         VehicleInventoryDefinition i=inventory(chest("ITEM_DISPLAY"));
         // Validate parsed chest model-relative offsets, no hardcoded world coords.
