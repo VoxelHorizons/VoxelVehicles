@@ -18,15 +18,33 @@ import java.util.UUID;
  * the accessory can still be clicked without changing the driver mount.
  */
 final class VehicleChestRenderer {
-    // The Java 8 / Bukkit 1.12.2 compile target does not expose this method,
-    // but modern Paper ItemDisplay entities do. Resolve once, not per tick.
-    private static final java.lang.reflect.Method SET_ROTATION=findRotationMethod();
-    private static java.lang.reflect.Method findRotationMethod(){
-        try{return Entity.class.getMethod("setRotation",float.class,float.class);}
-        catch(ReflectiveOperationException ignored){return null;}
+    /**
+     * Resolve JOML reflection only once instead of rediscovering Matrix4f
+     * methods for every turn of every installed chest.
+     */
+    private static final class MatrixOps {
+        static final MatrixOps INSTANCE=new MatrixOps();
+        final Class<?> type;
+        final java.lang.reflect.Constructor<?> constructor;
+        final java.lang.reflect.Method translate,rotateX,rotateY,rotateZ,scale;
+        MatrixOps(){
+            try{
+                type=Class.forName("org.joml.Matrix4f");
+                constructor=type.getConstructor();
+                translate=type.getMethod("translate",float.class,float.class,float.class);
+                rotateX=type.getMethod("rotateX",float.class);
+                rotateY=type.getMethod("rotateY",float.class);
+                rotateZ=type.getMethod("rotateZ",float.class);
+                scale=type.getMethod("scale",float.class,float.class,float.class);
+            }catch(ReflectiveOperationException error){
+                throw new IllegalStateException("Modern Paper/JOML matrices unavailable",error);
+            }
+        }
     }
 
     private final VoxelVehicles plugin;
+    private Class<?> setterOwner;
+    private java.lang.reflect.Method matrixSetter;
     VehicleChestRenderer(VoxelVehicles plugin){this.plugin=plugin;}
 
     void refresh(VehicleInstance v,VehicleDefinition d)throws Exception{
@@ -51,6 +69,8 @@ final class VehicleChestRenderer {
         invoke(v.chestDisplay,"setItemStack",ItemStack.class,item);
         invokeOptional(v.chestDisplay,"setViewRange",float.class,d.viewDistance/64.0f);
         syncInterpolation(v,teleportDuration(v));
+        // A mounted ItemDisplay inherits the tractor's movement/orientation.
+        // Never apply a second yaw correction around the seat pivot.
         matrix(v,d);
         if(c.interaction){
             if(v.chestHitbox==null||!v.chestHitbox.isValid()){
@@ -77,27 +97,18 @@ final class VehicleChestRenderer {
 
     void move(VehicleInstance v,VehicleDefinition d){
         if(v.chestDisplay==null||!v.chestDisplay.isValid())return;
-        boolean previouslyLinked=v.chestPassengerLinked;
+        boolean wasAttached=VehicleChestMount.attached(v);
         boolean linked=VehicleChestMount.ensure(v,d.inventory.chest.attachToVehicle);
-        if(linked!=previouslyLinked)syncInterpolation(v,teleportDuration(v));
-        if(linked){
-            // The chest follows the mounted tractor's movement client-side,
-            // including interpolation. Only align its yaw; no chest teleport.
-            // It still needs its own heading for the local model matrix.
-            Location root=renderRoot(v,d);
-            try{
-                if(SET_ROTATION!=null
-                        &&Float.compare(v.chestDisplay.getLocation().getYaw(),root.getYaw())!=0)
-                    SET_ROTATION.invoke(v.chestDisplay,root.getYaw(),root.getPitch());
-            }catch(Exception error){
-                plugin.getLogger().fine("Cannot rotate vehicle chest passenger "+v.id
-                        +": "+error.getMessage());
-            }
-        }else{
-            // Compatibility path for servers rejecting another passenger.
-            // The original independent renderer remains fully supported.
+        if(linked!=wasAttached)syncInterpolation(v,teleportDuration(v));
+        if(!linked){
+            // Fallback only: independently move accessory if the platform
+            // cannot attach an ItemDisplay passenger.
             v.teleports.ensure(v.chestDisplay,renderRoot(v,d),true);
         }
+        // The chest is mounted at the parent's seat root with the SAME
+        // entity yaw and static local offset as the tractor. Sending a
+        // separate entity rotation or rotating its offset around the seat
+        // causes double-rotation/orbiting during left/right steering.
         moveHitbox(v,d);
     }
 
@@ -128,8 +139,11 @@ final class VehicleChestRenderer {
     void tilt(VehicleInstance v,VehicleDefinition d){
         if(v.chestDisplay==null||!v.chestDisplay.isValid())return;
         try{
+            // Match the tractor's cosmetic tilt interpolation exactly.
+            // Its parent handles yaw/position; only the local tilt changes.
             invokeOptional(v.chestDisplay,"setInterpolationDuration",int.class,
-                    Math.max(0,Math.min(5,plugin.getConfig().getInt("render.tilt-interpolation-ticks",2))));
+                    Math.max(0,Math.min(5,plugin.getConfig().getInt(
+                            "render.tilt-interpolation-ticks",2))));
             invokeOptional(v.chestDisplay,"setInterpolationDelay",int.class,-1);
             matrix(v,d);
             // Only the clickable attachment centre may change on tilt.
@@ -171,25 +185,29 @@ final class VehicleChestRenderer {
      */
     private void matrix(VehicleInstance v,VehicleDefinition d)throws Exception{
         VehicleChestDefinition c=d.inventory.chest;
-        Class<?> matrix=Class.forName("org.joml.Matrix4f");
-        Object value=matrix.getConstructor().newInstance();
-        double[] seatToModel=VehicleTransform.modelTranslation(d);
-        matrix.getMethod("translate",float.class,float.class,float.class).invoke(
-                value,(float)seatToModel[0],(float)seatToModel[1],(float)seatToModel[2]);
+        MatrixOps ops=MatrixOps.INSTANCE;
+        Object value=ops.constructor.newInstance();
+        // Translate first, matching VehicleRenderer.applyMatrix: all local
+        // model offsets remain fixed relative to the tractor body. The
+        // parent entity is the single owner of world yaw on steering.
+        ops.translate.invoke(value,(float)-d.seatX,(float)-d.seatY,(float)-d.seatZ);
         if(c.followTilt){
             if(Math.abs(v.visualPitch)>0.001)
-                matrix.getMethod("rotateX",float.class).invoke(value,(float)Math.toRadians(-v.visualPitch));
+                ops.rotateX.invoke(value,(float)Math.toRadians(-v.visualPitch));
             if(Math.abs(v.visualRoll)>0.001)
-                matrix.getMethod("rotateZ",float.class).invoke(value,(float)Math.toRadians(v.visualRoll));
+                ops.rotateZ.invoke(value,(float)Math.toRadians(v.visualRoll));
         }
-        matrix.getMethod("translate",float.class,float.class,float.class).invoke(
-                value,(float)c.x,(float)c.y,(float)c.z);
+        ops.translate.invoke(value,(float)c.x,(float)c.y,(float)c.z);
         // Bukkit positive yaw and JOML positive Y-rotation are opposite.
         if(Math.abs(c.yaw)>0.001)
-            matrix.getMethod("rotateY",float.class).invoke(value,(float)Math.toRadians(-c.yaw));
-        matrix.getMethod("scale",float.class,float.class,float.class).invoke(
-                value,(float)c.scale,(float)c.scale,(float)c.scale);
-        v.chestDisplay.getClass().getMethod("setTransformationMatrix",matrix).invoke(v.chestDisplay,value);
+            ops.rotateY.invoke(value,(float)Math.toRadians(-c.yaw));
+        ops.scale.invoke(value,(float)c.scale,(float)c.scale,(float)c.scale);
+        Class<?> entityClass=v.chestDisplay.getClass();
+        if(matrixSetter==null||setterOwner!=entityClass){
+            matrixSetter=entityClass.getMethod("setTransformationMatrix",ops.type);
+            setterOwner=entityClass;
+        }
+        matrixSetter.invoke(v.chestDisplay,value);
     }
 
     void remove(VehicleInstance v){

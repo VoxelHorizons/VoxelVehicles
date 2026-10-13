@@ -765,3 +765,25 @@ A mounted count equal to the number of active chest displays confirms that
 the shared-client-movement path is in use. This does not automatically
 guarantee smooth rendering for every client/protocol implementation; verify
 in-game while steering, driving up slopes, dismounting and re-entering.
+
+
+### Chest turning stability (PR #15)
+
+When the chest is mounted as a passenger of the main tractor ItemDisplay,
+the tractor is the *only* owner of world yaw and movement. Do not send
+independent chest yaw packets or add another heading correction to its local
+matrix: the latter rotates the attachment offset around the seat, visibly
+making the chest orbit the cabin. The chest's matrix keeps only its authored
+offset, tilt and scale.
+
+Cosmetic tilt now uses the same interpolation duration as the main vehicle
+model. All of the existing physics, chest hitbox, inventory and passenger
+lifecycle behavior remains unchanged. Cached JOML method lookups avoid
+reflecting the matrix operations on every suspension update.
+
+For compatibility, `attach_to_vehicle: false` still selects independent
+teleports if a particular server/client cannot render passenger displays.
+
+Verify in-game by driving and steering both directions, including tight
+turns and 0°/360° yaw crossings, then driving on sloped terrain. Test the
+chest's physical mounting position and clicking the separate hitbox.
