@@ -1,5 +1,6 @@
 package org.voxelhorizons.vehicles;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -30,8 +31,8 @@ public class VehiclePickupItemTest {
         item.setDurability((short)5);
         // On runtimes with a Bukkit ItemFactory, also validate name and lore.
         // The actual production ItemStack is copied without re-authoring meta.
-        ItemMeta meta=item.getItemMeta();
-        if(meta!=null){
+        if(Bukkit.getServer()!=null){
+            ItemMeta meta=item.getItemMeta();
             meta.setDisplayName("§eYELLOW TRACTOR");
             meta.setLore(Arrays.asList("§7Custom serialized lore","§6Owner edition"));
             item.setItemMeta(meta);
