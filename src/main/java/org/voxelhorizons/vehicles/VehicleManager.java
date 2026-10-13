@@ -91,7 +91,10 @@ public final class VehicleManager {
                     plugin.getLogger().warning("Could not repair "+v.id+": "+e.getMessage());
                 }
             }else{
-                try{renderer.refresh(v,d);}catch(Exception e){
+                try{
+                    VehicleSuspension.initialize(v,d);
+                    renderer.refresh(v,d);
+                }catch(Exception e){
                     plugin.getLogger().warning("Could not refresh "+v.id+": "+e.getMessage());
                 }
             }
@@ -263,6 +266,7 @@ public final class VehicleManager {
     }
 
     private void activate(VehicleInstance v,VehicleDefinition d){
+        VehicleSuspension.initialize(v,d);
         renderer.activate(v,d);
         index(v);
     }
@@ -301,21 +305,51 @@ public final class VehicleManager {
             }
             VehicleDefinition d=definitions.get(v.type);
             if(d==null){deindex(v);renderer.unseat(v,d);index(v);iter.remove();continue;}
-            VehiclePhysics.advance(v.motion,d,v.input);
-            double dx=VehiclePhysics.dx(v.motion.yaw)*v.motion.speed;
-            double dz=VehiclePhysics.dz(v.motion.yaw)*v.motion.speed;
-            double dy=0;
-            if(d.type==VehicleDefinition.Type.PLANE) {
-                dy=v.input.jump?d.climbSpeed:v.input.sneak?-d.climbSpeed:0;
-                dx*=d.flySpeed/d.speed;dz*=d.flySpeed/d.speed;
-            }else{
-                // Gravity only when unsupported. Avoid loading chunks under the vehicle.
-                Location below=v.location.clone().add(0,-0.12,0);
-                if(VehicleCollision.clear(below,d))dy=-0.12;
-            }
+            // One collision-shape snapshot per occupied vehicle/tick. The
+            // physical body is ground-relative, independent of model offsets.
+            VehicleTerrain.Space terrain=new VehicleTerrain.Space(v.location.getWorld());
             Location old=v.location;
-            Location next=VehicleCollision.step(v,d,dx,dy,dz,
-                    Math.max(0.05,plugin.getConfig().getDouble("physics.max-substep",0.25)));
+            double maxStep=Math.max(0.05,plugin.getConfig().getDouble("physics.max-substep",0.25));
+            Location next;
+            if(d.type==VehicleDefinition.Type.PLANE){
+                VehiclePhysics.advance(v.motion,d,v.input);
+                double dx=VehiclePhysics.dx(v.motion.yaw)*v.motion.speed*d.flySpeed/d.speed;
+                double dz=VehiclePhysics.dz(v.motion.yaw)*v.motion.speed*d.flySpeed/d.speed;
+                double dy=v.input.jump?d.climbSpeed:v.input.sneak?-d.climbSpeed:0;
+                next=VehicleCollision.step(v,d,dx,dy,dz,maxStep,terrain,false);
+            }else{
+                // While grounded: accelerate/steer and step up obstacles as before.
+                // In the air: preserve horizontal momentum and let gravity
+                // accumulate naturally, with no engine-driven air steering.
+                boolean onGround=VehicleCollision.supported(v.location,d,terrain);
+                if(onGround){
+                    v.motion.grounded=true;
+                    v.motion.verticalSpeed=0;
+                    VehiclePhysics.advance(v.motion,d,v.input);
+                }else{
+                    v.motion.grounded=false;
+                    VehiclePhysics.advanceAirborne(v.motion,d);
+                }
+                double dx=VehiclePhysics.dx(v.motion.yaw)*v.motion.speed;
+                double dz=VehiclePhysics.dz(v.motion.yaw)*v.motion.speed;
+                next=VehicleCollision.step(v,d,dx,0,dz,maxStep,terrain,onGround);
+                boolean stillSupported=VehicleCollision.supported(next,d,terrain);
+                if(stillSupported){
+                    v.motion.grounded=true;
+                    v.motion.verticalSpeed=0;
+                }else{
+                    v.motion.grounded=false;
+                    v.motion.verticalSpeed=VehiclePhysics.fallSpeed(
+                            v.motion.verticalSpeed,d.gravity,d.terminalVelocity);
+                    VehicleCollision.FallResult fall=VehicleCollision.descend(next,d,
+                            v.motion.verticalSpeed,maxStep,terrain);
+                    next=fall.location;
+                    if(fall.landed){
+                        v.motion.grounded=true;
+                        v.motion.verticalSpeed=0;
+                    }
+                }
+            }
             next.setYaw(v.motion.yaw);
             if(!old.equals(next)){
                 v.location=next;
@@ -325,6 +359,10 @@ public final class VehicleManager {
                     deindex(v);renderer.unseat(v,d);index(v);iter.remove();
                 }
             }
+            // Sample the four wheel positions each occupied tick. Only the
+            // visual model changes, never the passenger or hitbox orientation.
+            if(v.driver!=null&&VehicleSuspension.update(v,d,terrain))
+                renderer.updateTilt(v,d);
         }
         int interval=Math.max(20,plugin.getConfig().getInt("physics.autosave-ticks",200));
         if(++ticks%interval==0&&dirty)save();

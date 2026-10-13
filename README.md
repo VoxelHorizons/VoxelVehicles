@@ -126,9 +126,9 @@ properties:
     seat: {x: 0.0, y: -0.7, z: 0.0}
 ```
 
-For a tractor, set `offset.y: -0.25` to lower the *whole* model/collision/seat assembly; adjust `seat.y` separately to move just the driver. `rotation` is degrees around the Y axis in addition to the driving direction. The visual and hitbox follow the same yaw and offsets; the vehicle's physics direction does not change.
+For a tractor, set `offset.y: -0.25` to lower the **visual model, interaction box and seat**; collision/terrain driving stays anchored to the logical wheel-ground position. Adjust `seat.y` separately to position the driver relative to the model. `rotation` is degrees around the Y axis in addition to the driving direction.
 
-While occupied, the invisible driver seat rides the visible ItemDisplay, and the player rides the seat. The display is the only movement root, avoiding independently teleporting the model and rider. If a server rejects that link, VoxelVehicles logs a warning and uses the older fallback. This needs real-client validation, especially when using unusual model transforms.
+The ItemDisplay now doubles as the player seat on supported servers: **no additional armor stand** and no change of world origin when mounting. Its model vertices are translated relative to the seat root in exactly the same way when parked and mounted. An invisible ArmorStand is used only as a compatibility fallback if direct riding is refused. This still requires testing on Paper 26.2.
 
 **Left-click / punch** an unoccupied owned vehicle to pick it up as a dropped VoxelCore item; admins with `voxelvehicles.admin` can also pick it up. An arm-swing ray test works even where the Interaction entity does not fire Bukkit damage events. `/vv remove` deletes a nearby instance without an item drop.
 
@@ -153,3 +153,110 @@ accidentally be disabled or configured with excessive latency. Use 1 for the tig
 player/model alignment; 2 or 3 can be tested if an unusually high packet-latency
 connection still visibly snaps. Parked vehicle interpolation is unchanged.
 A live VoxelCore reload reapplies the correct mounted/parked interpolation.
+
+
+## Vehicle terrain physics and suspension
+
+Ground vehicles now check **actual Bukkit block collision shapes** on modern servers, rather than treating slabs and stairs as full cubes. The movement solver:
+- Drives onto lower/upper slabs and stairs using their physical collision surfaces.
+- Climbs at most **one full block per step**; a two-block-high wall always blocks the vehicle.
+- Drops onto lower terrain using existing grounded movement and gravity logic.
+- Never queries unloaded chunks (does not trigger chunk loads).
+- Shares a short-lived block-shape cache between collision, stepping and four-wheel visual terrain sampling for each active driver.
+
+Only the model pitches/rolls using the sampled elevation under its front/rear and left/right wheels. The collision box, steering direction, and rider's seat stay upright so the camera doesn't tilt with the model. Visual tilt uses independent 2-tick metadata interpolation by default; mounted teleport interpolation remains 1 tick.
+
+Recommended tractor configuration (under `properties.vehicle`):
+
+```yaml
+physics:
+  speed: 0.28
+  reverse: 0.12
+  acceleration: 0.015
+  braking: 0.04
+  drag: 0.90
+  turn_rate: 3.0
+  step_height: 1.0   # 1.0 = full blocks; 0.5 = slabs only
+
+suspension:
+  wheelbase: 2.4      # Distance between front/rear probe points (blocks)
+  track_width: 1.4   # Distance between left/right probe points (blocks)
+  max_pitch: 20.0    # Degrees to visually lift/dip the nose
+  max_roll: 12.0     # Degrees to visually lean sideways
+  smoothing: 0.24    # 0.01..1; larger = faster tilt response
+```
+
+If your tractor currently uses `step_height: 0.6`, increase it to `1.0` to climb full blocks. The physics parser rejects values over 1.0. Other vehicle types can keep their old settings. `render.tilt-interpolation-ticks` in `plugins/VoxelVehicles/config.yml` defaults to 2.
+
+Modern collision shapes are available on Paper 1.19.4+; the older reflective fallback uses full solid cubes and therefore cannot represent precise stairs/slabs. Test against Paper 26.2 first. Visual slope animation is cosmetic, not a four-wheel rigid-body solver, and the current collision footprint remains axis-aligned even while the model tilts.
+
+## Stable seat anchor and independent physical collision (PR #8 follow-up)
+
+The **interaction hitbox is for mouse targeting only**. Its width/height/offset may overlap stone, and such overlaps must no longer reject vehicle placement. The terrain physics collision is a separate footprint anchored to the vehicle's logical ground position.
+
+```yaml
+properties:
+  vehicle:
+    type: LAND
+    offset: {x: 0.0, y: 0.0, z: 0.0, rotation: 0}
+    hitbox:
+      width: 2.8
+      height: 2.2
+      offset: {x: 0.0, y: -1.0, z: 0.0}
+    seat: {x: 0.0, y: -0.7, z: 0.0}
+    collision:
+      width: 1.0
+      height: 1.5
+      offset: {x: 0.0, y: 0.0, z: 0.0}
+```
+
+The new `collision` section is **optional**. Defaults are 1.0 block wide, 1.5 blocks tall, and no offset; tune it independently of your model/clickable bounds. A ground-level collision body may still legitimately prevent spawning *inside a solid obstacle*, but changing `hitbox.offset.y` or `vehicle.offset.y` no longer affects that decision.
+
+To eliminate the jump on mount, the ItemDisplay's world root always equals the configured seat location. Its transformation matrix translates the visible model back towards the visual origin. When mounting, the player becomes a direct passenger of that existing root, with no origin switch or offset remeasurement. The model's world position should therefore remain exactly where it was before mounting. The passenger's vanilla riding height may need tuning with `seat.y`, particularly if a fallback ArmorStand is in use.
+
+Test on Paper 26.2:
+1. Place a vehicle with a clickbox partially inside stone: placement must succeed if its **physics body** has room.
+2. Mount and dismount without movement: the tractor model must not jump or float.
+3. Drive through a slab, stairs, a single step and toward a two-block wall.
+4. Reload VoxelCore while the vehicle is parked, then mounted, and confirm offsets remain stable.
+
+
+## Driving off cliffs: airborne gravity and nose/rear pitch
+
+Land vehicles now use an accumulated **vertical velocity** rather than the old
+fixed 0.12-block downward probe. After driving off a cliff, the tractor keeps
+its horizontal momentum, accelerates downward under gravity, reaches a terminal
+fall speed, and lands on the top of actual block collision shapes without
+permanently hovering a fractional block above the ground.
+
+The visual suspension switches smoothly to **airborne pitch**: driving forwards
+off a ledge dips the nose; reversing off a ledge tilts the rear down. A
+straight vertical drop has no artificially imposed forward/backward lean.
+Landing returns to the existing four-wheel terrain tilt. The camera/seat,
+physical collision body, resource-pack model and clickbox retain their
+previous alignment; only the visual model matrix tilts.
+
+Optional tuning keys under the existing `properties.vehicle`:
+
+```yaml
+physics:
+  gravity: 0.08           # Downward acceleration in blocks/tick²
+  terminal_velocity: 1.6 # Maximum fall speed in blocks/tick
+  air_drag: 0.99          # Preserves horizontal momentum each airborne tick
+
+suspension:
+  airborne_pitch_factor: 0.8 # 0 disables in-air nose/rear tilt; 2 is strongest
+```
+
+These values are defaults; existing vehicle content files continue to load
+without defining them. `suspension.max_pitch` also limits airborne pitch,
+and `suspension.smoothing` controls how quickly it blends with terrain tilt.
+Airborne land vehicles cannot steer or accelerate in mid-air: steering resumes
+on contact with the ground. There is **no fall-damage or vehicle durability
+system** in this version. The active driving tick still handles physics while
+the vehicle has a driver; passive falling for unmanned vehicles is a separate
+future improvement.
+
+Validation: test forward and reverse departures, drops onto full blocks and
+slabs, ledges bordering unloaded chunks, and landing immediately after driving
+over a one-block obstacle on Paper 26.2.
