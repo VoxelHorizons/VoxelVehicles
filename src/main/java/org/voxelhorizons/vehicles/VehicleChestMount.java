@@ -57,6 +57,11 @@ final class VehicleChestMount {
         return false;
     }
 
+    /** A new seating or content refresh is a safe, bounded retry point. */
+    static void allowRetry(VehicleInstance v){
+        if(v!=null&&!attached(v))v.chestPassengerAttempted=false;
+    }
+
     /** Remove only the accessory. Do not eject the driver or other riders. */
     static void release(VehicleInstance v){
         if(v==null)return;
