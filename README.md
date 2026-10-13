@@ -576,13 +576,19 @@ inventory:
 | Interaction | Action |
 | --- | --- |
 | Normal right-click the tractor (even holding CHEST) | Mount, as usual |
-| Shift + right-click while holding CHEST (only compatible vehicles) | Attach one chest; enable storage |
+| Shift + right-click while holding CHEST (only compatible vehicles without a chest) | Attach one chest **without opening the inventory** |
 | Shift + right-click with any other item or an empty hand | Open the existing vehicle inventory |
 | Shift + right-click with CHEST when chest is already installed | Open inventory; do not consume another chest |
 | Click attached chest accessory with right-click | Open the vehicle inventory |
 | Left-click attached chest accessory without crouching | Detach chest, only when completely empty |
 | `/vv chest remove` (within six blocks or mounted) | Remove empty chest when no accessory exists or is difficult to target |
 | F while mounted | Open vehicle inventory (default existing shortcut) |
+
+On Paper, one physical shift-right-click can generate multiple entity
+and fallback interaction events. VoxelVehicles suppresses duplicate events
+immediately following a chest install so the storage UI cannot accidentally
+open from the installation click itself. A separate right-click still opens
+storage as expected, even while a chest remains in the player's hand.
 
 **The vehicle GUI contains no chest installation button, reserved chest slot,
 or equipment cell.** All non-cargo slots continue to use the existing
