@@ -116,6 +116,20 @@ public class VehicleChestMountTest {
         assertTrue(VehicleChestMount.attached(f.vehicle));
     }
 
+    @Test public void contentRefreshOrRemountRetriesPreviouslyRejectedAttachment(){
+        Fixture f=new Fixture();
+        f.main.accepts=false;
+        assertFalse(VehicleChestMount.ensure(f.vehicle,true));
+        assertFalse(VehicleChestMount.ensure(f.vehicle,true));
+        assertEquals(1,f.main.addCalls);
+        // Retry remains gated by an explicit lifecycle transition rather
+        // than repeatedly attempting mounts during normal vehicle ticks.
+        VehicleChestMount.allowRetry(f.vehicle);
+        f.main.accepts=true;
+        assertTrue(VehicleChestMount.ensure(f.vehicle,true));
+        assertEquals(2,f.main.addCalls);
+    }
+
     @Test public void unexpectedPassengerDetachGetsOneRecoveryAttempt(){
         Fixture f=new Fixture();
         assertTrue(VehicleChestMount.ensure(f.vehicle,true));
