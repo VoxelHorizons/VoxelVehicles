@@ -20,6 +20,8 @@ public final class VehicleInstance {
     public UUID driver;
     /** True when the rider (or compatibility seat) rides the ItemDisplay root. */
     public boolean linkedSeat;
+    /** Accessory passenger state; avoid failed addPassenger calls every tick. */
+    boolean chestPassengerLinked,chestPassengerAttempted;
     /** Cosmetic terrain suspension only; never rotates the physical hitbox or rider. */
     public double visualPitch,visualRoll;
     public VehiclePhysics.Input input=VehiclePhysics.Input.NEUTRAL;
