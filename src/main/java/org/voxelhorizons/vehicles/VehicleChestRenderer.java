@@ -9,13 +9,23 @@ import java.util.UUID;
 
 /**
  * Optional visual-only installable chest. The display shares the exact
- * seat-anchored render ROOT with the tractor's ItemDisplay, rather than
- * teleporting around it at independently rotated world coordinates.
+ * seat-anchored render ROOT with the tractor's ItemDisplay.
+ * It now rides that display as a passenger: only the tractor receives
+ * world-position teleports. This avoids independent client interpolation
+ * that could make the chest lag, wobble or reverse its apparent movement.
  * Its matrix offsets the actual chest in vehicle-local space.
  * A separate Interaction remains at the chest's world-space position so
  * the accessory can still be clicked without changing the driver mount.
  */
 final class VehicleChestRenderer {
+    // The Java 8 / Bukkit 1.12.2 compile target does not expose this method,
+    // but modern Paper ItemDisplay entities do. Resolve once, not per tick.
+    private static final java.lang.reflect.Method SET_ROTATION=findRotationMethod();
+    private static java.lang.reflect.Method findRotationMethod(){
+        try{return Entity.class.getMethod("setRotation",float.class,float.class);}
+        catch(ReflectiveOperationException ignored){return null;}
+    }
+
     private final VoxelVehicles plugin;
     VehicleChestRenderer(VoxelVehicles plugin){this.plugin=plugin;}
 
@@ -61,15 +71,33 @@ final class VehicleChestRenderer {
             v.teleports.forget(v.chestHitbox);
             v.chestHitbox.remove();v.chestHitbox=null;
         }
+        VehicleChestMount.allowRetry(v);
         move(v,d);
     }
 
     void move(VehicleInstance v,VehicleDefinition d){
         if(v.chestDisplay==null||!v.chestDisplay.isValid())return;
-        // Both ItemDisplays use the same root in the same server tick.
-        // Deduplicate only when the desired pose has not changed; never
-        // downsample real movement or break the driver/chest interpolation.
-        v.teleports.ensure(v.chestDisplay,renderRoot(v,d),true);
+        boolean previouslyLinked=v.chestPassengerLinked;
+        boolean linked=VehicleChestMount.ensure(v,d.inventory.chest.attachToVehicle);
+        if(linked!=previouslyLinked)syncInterpolation(v,teleportDuration(v));
+        if(linked){
+            // The chest follows the mounted tractor's movement client-side,
+            // including interpolation. Only align its yaw; no chest teleport.
+            // It still needs its own heading for the local model matrix.
+            Location root=renderRoot(v,d);
+            try{
+                if(SET_ROTATION!=null
+                        &&Float.compare(v.chestDisplay.getLocation().getYaw(),root.getYaw())!=0)
+                    SET_ROTATION.invoke(v.chestDisplay,root.getYaw(),root.getPitch());
+            }catch(Exception error){
+                plugin.getLogger().fine("Cannot rotate vehicle chest passenger "+v.id
+                        +": "+error.getMessage());
+            }
+        }else{
+            // Compatibility path for servers rejecting another passenger.
+            // The original independent renderer remains fully supported.
+            v.teleports.ensure(v.chestDisplay,renderRoot(v,d),true);
+        }
         moveHitbox(v,d);
     }
 
@@ -85,7 +113,8 @@ final class VehicleChestRenderer {
 
     void syncInterpolation(VehicleInstance v,int ticks){
         if(v.chestDisplay!=null&&v.chestDisplay.isValid())
-            invokeOptional(v.chestDisplay,"setTeleportDuration",int.class,ticks);
+            invokeOptional(v.chestDisplay,"setTeleportDuration",int.class,
+                    VehicleChestMount.attached(v)?0:ticks);
     }
 
     private int teleportDuration(VehicleInstance v){
@@ -164,6 +193,7 @@ final class VehicleChestRenderer {
     }
 
     void remove(VehicleInstance v){
+        VehicleChestMount.reset(v);
         if(v.chestHitbox!=null){
             v.teleports.forget(v.chestHitbox);
             v.chestHitbox.remove();v.chestHitbox=null;

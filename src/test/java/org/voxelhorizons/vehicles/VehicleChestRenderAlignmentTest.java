@@ -57,6 +57,38 @@ public class VehicleChestRenderAlignmentTest {
                 UUID.randomUUID(),new Location(null,10,64,20,yaw,0));
     }
 
+    @Test public void chestPassengerAttachmentIsEnabledByDefault(){
+        VehicleDefinition d=definition(true);
+        assertTrue(d.inventory.chest.attachToVehicle);
+        assertEquals(VehicleChestDefinition.VisualMode.ITEM_DISPLAY,d.inventory.chest.mode);
+    }
+
+    @Test public void explicitlyDisabledChestPassengerModeParsesWithoutAffectingVisualOffset(){
+        VehicleDefinition expected=definition(true);
+        ContentID id=ContentID.of("voxel","tractor-compat");
+        Map<String,Object> visual=new HashMap<String,Object>();
+        visual.put("mode","ITEM_DISPLAY");
+        visual.put("attach_to_vehicle",false);
+        visual.put("offset",vector(0.7,1.1,-1.4));
+        Map<String,Object> chest=new HashMap<String,Object>();
+        chest.put("enabled",true);
+        chest.put("visual",visual);
+        Map<String,Object> inventory=new HashMap<String,Object>();
+        inventory.put("rows",3);
+        inventory.put("chest",chest);
+        Map<String,Object> vehicle=new HashMap<String,Object>();
+        vehicle.put("inventory",inventory);
+        Map<String,Object> properties=new HashMap<String,Object>();
+        properties.put("vehicle",vehicle);
+        ItemDefinition item=new ItemDefinition(id,null,"PAPER","Tractor",
+                Collections.<String>emptyList(),true,Optional.<ContentID>empty(),
+                null,properties);
+        VehicleDefinition compatibility=VehicleDefinition.parse(item).get();
+        assertFalse(compatibility.inventory.chest.attachToVehicle);
+        assertEquals(expected.inventory.chest.x,compatibility.inventory.chest.x,1e-6);
+        assertEquals(expected.inventory.chest.z,compatibility.inventory.chest.z,1e-6);
+    }
+
     @Test public void chestAndTractorShareExactlyTheSameRenderRootAtAllYawAngles(){
         VehicleDefinition d=definition(true);
         for(float yaw:new float[]{0,45,90,135,180,-90,-135}){

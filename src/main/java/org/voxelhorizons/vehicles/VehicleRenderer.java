@@ -120,12 +120,28 @@ final class VehicleRenderer {
         try{
             // Prefer the single-entity setup: the display is both the model
             // root and the mount, without an independent armor stand chasing it.
-            if(v.display.addPassenger(player)){
+            boolean directlyMounted=false;
+            try{
+                directlyMounted=v.display.addPassenger(player);
+            }catch(RuntimeException rejected){
+                if(!VehicleChestMount.attached(v))throw rejected;
+                // Some implementations throw instead of returning false
+                // when the mounted chest occupies the primary rider slot.
+            }
+            if(!directlyMounted&&VehicleChestMount.attached(v)){
+                // On servers limiting the number of direct passengers, the
+                // player always has priority. Temporarily unlink the chest,
+                // then let chest.move() reattach it or fall back safely.
+                VehicleChestMount.release(v);
+                directlyMounted=v.display.addPassenger(player);
+            }
+            if(directlyMounted){
                 v.seat=v.display;
                 v.linkedSeat=true;
                 v.driver=player.getUniqueId();
                 invokeOptional(v.display,"setTeleportDuration",int.class,mountedInterpolation());
                 chest.syncInterpolation(v,mountedInterpolation());
+                VehicleChestMount.allowRetry(v);
                 move(v,d);
                 return true;
             }
@@ -148,12 +164,14 @@ final class VehicleRenderer {
                 if(linked)v.display.removePassenger(stand);
                 v.teleports.forget(stand);
                 stand.remove();
+                chest.move(v,d);
                 return false;
             }
             v.seat=stand;v.linkedSeat=linked;
             v.driver=player.getUniqueId();
             invokeOptional(v.display,"setTeleportDuration",int.class,mountedInterpolation());
             chest.syncInterpolation(v,mountedInterpolation());
+            VehicleChestMount.allowRetry(v);
             move(v,d);
             if(!linked)plugin.getLogger().warning("Vehicle "+v.id+
                     " is using independent fallback seating (display passengers unavailable).");
@@ -167,6 +185,7 @@ final class VehicleRenderer {
             }
             v.seat=null;v.linkedSeat=false;v.stop();
             plugin.getLogger().warning("Unable to mount "+v.id+": "+ex.getMessage());
+            chest.move(v,d);
             return false;
         }
     }
@@ -174,7 +193,11 @@ final class VehicleRenderer {
     void unseat(VehicleInstance v,VehicleDefinition definition){
         if(v.seat!=null){
             if(v.seat==v.display){
-                if(v.display!=null&&v.display.isValid())v.display.eject();
+                // This root now also carries the chest ItemDisplay. eject()
+                // removes EVERY passenger, including the visual accessory.
+                // Only remove the driver, preserving the entire assembly.
+                if(v.display!=null&&v.display.isValid())
+                    unseatDriver(v.display,v.driver);
             }else{
                 if(v.linkedSeat&&v.display!=null&&v.display.isValid())
                     v.display.removePassenger(v.seat);
@@ -188,8 +211,19 @@ final class VehicleRenderer {
         if(definition!=null&&v.display!=null&&v.display.isValid()){
             invokeOptional(v.display,"setTeleportDuration",int.class,interpolation());
             chest.syncInterpolation(v,interpolation());
+            VehicleChestMount.allowRetry(v);
             move(v,definition);
         }
+    }
+
+    /** Never eject furniture/accessory passengers when the driver leaves. */
+    static boolean unseatDriver(Entity root,UUID driver){
+        if(root==null||driver==null)return false;
+        for(Entity passenger:root.getPassengers()){
+            if(driver.equals(passenger.getUniqueId()))
+                return root.removePassenger(passenger);
+        }
+        return false;
     }
 
     void deactivate(VehicleInstance v){

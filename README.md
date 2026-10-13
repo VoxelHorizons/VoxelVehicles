@@ -731,3 +731,37 @@ Nothing needs to be emptied or detached first.
   persistence cancel the pickup instead of silently discarding cargo.
 - `/vv remove` remains an administrator-only removal command, not
   the player's vehicle reclaim action.
+
+
+## Seamless attached chest movement
+
+When a vehicle has an installed chest with `chest.visual.mode: ITEM_DISPLAY`,
+the chest now rides the **same ItemDisplay movement root** as the tractor and
+its driver. The client receives one movement/interpolation source rather than
+two independently teleported displays. The chest model's local offset, scale,
+optional yaw and suspension tilt are unchanged. Its separate Interaction
+hitbox still moves independently so the chest remains clickable.
+
+This is enabled automatically; existing tractor YAML requires no changes.
+For troubleshooting or compatibility with servers that reject display
+passengers, use the optional setting:
+
+```yaml
+inventory:
+  chest:
+    enabled: true
+    visual:
+      mode: ITEM_DISPLAY
+      attach_to_vehicle: true  # default; false uses old independent teleports
+```
+
+The player retains mounting priority if a server restricts passenger count.
+The plugin falls back to synchronized chest teleports when the extra passenger
+cannot be attached, without changing player/vehicle seating. Dismount now
+removes only the rider, never ejects the chest attachment.
+
+Run `/vv perf` as an admin to see **Chest displays mounted: N / M**.
+A mounted count equal to the number of active chest displays confirms that
+the shared-client-movement path is in use. This does not automatically
+guarantee smooth rendering for every client/protocol implementation; verify
+in-game while steering, driving up slopes, dismounting and re-entering.
