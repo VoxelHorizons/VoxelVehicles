@@ -3,6 +3,7 @@ main: org.voxelhorizons.vehicles.VoxelVehicles
 version: '${project.version}'
 api-version: '1.19'
 depend: [VoxelCore]
+softdepend: [WorldGuard, Lands]
 description: VoxelCore vehicle physics and display-based vehicles.
 author: VoxelHorizons
 commands:
