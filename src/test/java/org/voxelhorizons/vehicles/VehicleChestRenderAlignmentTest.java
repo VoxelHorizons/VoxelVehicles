@@ -118,6 +118,30 @@ public class VehicleChestRenderAlignmentTest {
         }
     }
 
+    @Test public void turningKeepsChestAtSameAuthoredLocalOffsetFromVehicle(){
+        VehicleDefinition d=definition(false);
+        // The chest's own matrix must NOT rotate the seat-to-model and
+        // chest-offset vectors around the passenger seat a second time.
+        double[] translation=VehicleTransform.modelTranslation(d);
+        double localX=translation[0]+d.inventory.chest.x;
+        double localY=translation[1]+d.inventory.chest.y;
+        double localZ=translation[2]+d.inventory.chest.z;
+        for(float yaw:new float[]{-179,-90,-20,0,45,90,179,180,270,360,450}){
+            VehicleInstance v=vehicle(yaw);
+            Location root=VehicleTransform.renderRoot(v.location,d);
+            Location chest=VehicleChestRenderer.position(v,d);
+            double theta=Math.toRadians(root.getYaw());
+            double worldX=localX*Math.cos(theta)-localZ*Math.sin(theta);
+            double worldZ=localX*Math.sin(theta)+localZ*Math.cos(theta);
+            assertEquals("left/right offset at "+yaw,root.getX()+worldX,
+                    chest.getX(),1e-5);
+            assertEquals("forward/back offset at "+yaw,root.getZ()+worldZ,
+                    chest.getZ(),1e-5);
+            assertEquals("height at "+yaw,root.getY()+localY,
+                    chest.getY(),1e-5);
+        }
+    }
+
     @Test public void tiltedChestHitboxRotatesAroundVisualOriginNotPassengerSeat(){
         VehicleDefinition d=definition(true);
         VehicleInstance v=vehicle(90);
