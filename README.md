@@ -602,6 +602,39 @@ The upgrade persists through server restarts. Removal is denied if
 any stored cargo remains (including hidden cargo), and the tractor itself
 cannot be picked up until the chest is removed.
 
+### Chest-specific vehicle inventory preview
+
+An optional chest-specific VoxelCore icon can replace the normal inventory
+preview when the storage upgrade is attached. Define the icon separately and
+set `chest.preview_item` alongside the existing `inventory.preview_item`:
+
+```yaml
+inventory:
+  enabled: true
+  rows: 3
+  preview-slot: 10
+  preview_item: voxel:tractor_icon
+  fill-item: "voxel:ui/blank"
+  chest:
+    enabled: true
+    item: CHEST
+    preview_item: voxel:tractor_chest_icon
+    visual:
+      mode: MODEL_SWAP
+      model_item: voxel:tractor_chest
+```
+
+While no chest is installed, the menu continues to render
+`inventory.preview_item` (or `vehicle.model_item` if that is omitted).
+Once the chest is installed, the menu renders `chest.preview_item`
+regardless of the chest's visual mode. Detaching the chest reverts the
+preview on the next inventory open. The icon receives the vehicle's stored
+dye color exactly as the original preview did, and the invisible filler
+continues copying the selected preview's hover title and lore. If the
+optional `chest.preview_item` is omitted, existing menus behave exactly
+as before. The chest visual's `model_item` and this GUI-only preview are
+independent.
+
 ### Visual positioning and alternatives
 
 Chest `visual.offset` is specified in blocks in the vehicle model's local
