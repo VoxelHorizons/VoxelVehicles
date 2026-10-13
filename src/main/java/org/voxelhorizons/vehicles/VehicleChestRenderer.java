@@ -18,6 +18,14 @@ import java.util.UUID;
  * the accessory can still be clicked without changing the driver mount.
  */
 final class VehicleChestRenderer {
+    // The Java 8 / Bukkit 1.12.2 compile target does not expose this method,
+    // but modern Paper ItemDisplay entities do. Resolve once, not per tick.
+    private static final java.lang.reflect.Method SET_ROTATION=findRotationMethod();
+    private static java.lang.reflect.Method findRotationMethod(){
+        try{return Entity.class.getMethod("setRotation",float.class,float.class);}
+        catch(ReflectiveOperationException ignored){return null;}
+    }
+
     private final VoxelVehicles plugin;
     VehicleChestRenderer(VoxelVehicles plugin){this.plugin=plugin;}
 
@@ -77,9 +85,10 @@ final class VehicleChestRenderer {
             // It still needs its own heading for the local model matrix.
             Location root=renderRoot(v,d);
             try{
-                if(Float.compare(v.chestDisplay.getLocation().getYaw(),root.getYaw())!=0)
-                    v.chestDisplay.setRotation(root.getYaw(),root.getPitch());
-            }catch(RuntimeException error){
+                if(SET_ROTATION!=null
+                        &&Float.compare(v.chestDisplay.getLocation().getYaw(),root.getYaw())!=0)
+                    SET_ROTATION.invoke(v.chestDisplay,root.getYaw(),root.getPitch());
+            }catch(Exception error){
                 plugin.getLogger().fine("Cannot rotate vehicle chest passenger "+v.id
                         +": "+error.getMessage());
             }
