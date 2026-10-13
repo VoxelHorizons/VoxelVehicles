@@ -126,4 +126,49 @@ public class VehicleChestTest {
         assertEquals(VehicleChestDefinition.VisualMode.NONE,i.chest.mode);
         assertFalse(i.chest.interaction);
     }
+    @Test public void sameClickCannotOpenNewlyInstalledChestThroughOtherEventHandlers(){
+        UUID vehicle=UUID.randomUUID();
+        long installationTick=350L;
+        // The first interact event installs the chest. Bukkit may immediately
+        // dispatch another at-entity or air/block fallback for that same click.
+        assertTrue(VehicleListener.isChestInstallFollowup(
+                vehicle,vehicle,installationTick,installationTick));
+        assertTrue(VehicleListener.isChestInstallFollowup(
+                vehicle,vehicle,installationTick,installationTick+1));
+        // A fresh, deliberate right-click after the installation event burst
+        // may open storage, including when a CHEST is still in the main hand.
+        assertFalse(VehicleListener.isChestInstallFollowup(
+                vehicle,vehicle,installationTick,installationTick+2));
+    }
+
+    @Test public void chestInstallSuppressionIsLimitedToOneVehicleAndValidTick(){
+        UUID newlyUpgraded=UUID.randomUUID(),otherVehicle=UUID.randomUUID();
+        assertFalse(VehicleListener.isChestInstallFollowup(
+                otherVehicle,newlyUpgraded,200,200));
+        assertFalse(VehicleListener.isChestInstallFollowup(
+                newlyUpgraded,newlyUpgraded,200,199));
+        assertFalse(VehicleListener.isChestInstallFollowup(
+                newlyUpgraded,newlyUpgraded,200,203));
+        assertFalse(VehicleListener.isChestInstallFollowup(
+                newlyUpgraded,null,200,200));
+        assertFalse(VehicleListener.isChestInstallFollowup(
+                null,newlyUpgraded,200,200));
+    }
+
+    @Test public void chestItemIsEligibleBeforeAndAfterInstallation(){
+        // This material/config predicate deliberately does not inspect
+        // installedChest. Fresh installations take precedence; once installed,
+        // the listener treats the same eligible click as a normal GUI open.
+        VehicleInventoryDefinition definition=inventory(chest("MODEL_SWAP"));
+        VehicleInstance vehicle=instance();
+        assertTrue(VehicleListener.shouldAttemptChestInstall(true,
+                definition.chest.enabled,definition.enabled,definition.storageEnabled,
+                definition.rows,Material.CHEST,definition.chest.item));
+        vehicle.installedChest=new ItemStack(Material.CHEST);
+        assertTrue(vehicle.chestInstalled());
+        assertTrue(VehicleListener.shouldAttemptChestInstall(true,
+                definition.chest.enabled,definition.enabled,definition.storageEnabled,
+                definition.rows,Material.CHEST,definition.chest.item));
+    }
+
 }
