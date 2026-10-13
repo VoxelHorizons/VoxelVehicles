@@ -69,9 +69,9 @@ final class VehicleChestRenderer {
         invoke(v.chestDisplay,"setItemStack",ItemStack.class,item);
         invokeOptional(v.chestDisplay,"setViewRange",float.class,d.viewDistance/64.0f);
         syncInterpolation(v,teleportDuration(v));
-        // Refresh may run while the display is mounted; retain the stable
-        // passenger yaw correction even if only chest tint/model has changed.
-        matrix(v,d,rotationCorrection(v,d));
+        // A mounted ItemDisplay inherits the tractor's movement/orientation.
+        // Never apply a second yaw correction around the seat pivot.
+        matrix(v,d);
         if(c.interaction){
             if(v.chestHitbox==null||!v.chestHitbox.isValid()){
                 if(v.chestHitbox!=null){
@@ -97,53 +97,19 @@ final class VehicleChestRenderer {
 
     void move(VehicleInstance v,VehicleDefinition d){
         if(v.chestDisplay==null||!v.chestDisplay.isValid())return;
-        boolean previouslyLinked=v.chestPassengerLinked;
-        boolean wasActuallyAttached=VehicleChestMount.attached(v);
+        boolean wasAttached=VehicleChestMount.attached(v);
         boolean linked=VehicleChestMount.ensure(v,d.inventory.chest.attachToVehicle);
-        if(linked!=wasActuallyAttached)syncInterpolation(v,teleportDuration(v));
-        if(linked){
-            if(!wasActuallyAttached){
-                // A passenger doesn't reliably inherit its host's YAW on
-                // Minecraft clients. Never fight that with setRotation every
-                // tick; remember the initial yaw and rotate the LOCAL item
-                // matrix relative to it. Both components share one position.
-                v.chestPassengerYawBasis=v.chestDisplay.getLocation().getYaw();
-                v.chestLastMatrixYaw=Float.NaN;
-            }
-            float corrected=rotationCorrection(v,d);
-            if(Float.compare(corrected,v.chestLastMatrixYaw)!=0){
-                try{
-                    // One client tick matches the tractor's mounted movement
-                    // interpolation. Avoid re-arming this every idle tick.
-                    invokeOptional(v.chestDisplay,"setInterpolationDuration",int.class,
-                            VehicleRenderer.clampMountedInterpolation(plugin.getConfig().getInt(
-                                    "render.mounted-interpolation-ticks",1)));
-                    invokeOptional(v.chestDisplay,"setInterpolationDelay",int.class,-1);
-                    matrix(v,d,corrected);
-                    v.chestLastMatrixYaw=corrected;
-                }catch(Exception error){
-                    plugin.getLogger().warning("Cannot rotate mounted chest model "+v.id
-                            +": "+error.getMessage());
-                }
-            }
-        }else{
-            // A server that rejects passenger displays retains the previous
-            // independent root teleport method and its original local matrix.
-            if(previouslyLinked||wasActuallyAttached){
-                try{matrix(v,d,0.0f);}
-                catch(Exception error){plugin.getLogger().warning(
-                        "Cannot reset detached chest model "+v.id+": "+error.getMessage());}
-            }
-            v.chestLastMatrixYaw=Float.NaN;
+        if(linked!=wasAttached)syncInterpolation(v,teleportDuration(v));
+        if(!linked){
+            // Fallback only: independently move accessory if the platform
+            // cannot attach an ItemDisplay passenger.
             v.teleports.ensure(v.chestDisplay,renderRoot(v,d),true);
         }
+        // The chest is mounted at the parent's seat root with the SAME
+        // entity yaw and static local offset as the tractor. Sending a
+        // separate entity rotation or rotating its offset around the seat
+        // causes double-rotation/orbiting during left/right steering.
         moveHitbox(v,d);
-    }
-
-    private static float rotationCorrection(VehicleInstance v,VehicleDefinition d){
-        return VehicleChestMount.attached(v)
-                ?VehicleChestYaw.delta(renderRoot(v,d).getYaw(),v.chestPassengerYawBasis)
-                :0.0f;
     }
 
     private void moveHitbox(VehicleInstance v,VehicleDefinition d){
@@ -173,14 +139,13 @@ final class VehicleChestRenderer {
     void tilt(VehicleInstance v,VehicleDefinition d){
         if(v.chestDisplay==null||!v.chestDisplay.isValid())return;
         try{
+            // Match the tractor's cosmetic tilt interpolation exactly.
+            // Its parent handles yaw/position; only the local tilt changes.
             invokeOptional(v.chestDisplay,"setInterpolationDuration",int.class,
-                    VehicleChestMount.attached(v)&&v.seat!=null
-                            ?VehicleRenderer.clampMountedInterpolation(plugin.getConfig().getInt(
-                                    "render.mounted-interpolation-ticks",1))
-                            :Math.max(0,Math.min(5,plugin.getConfig().getInt(
-                                    "render.tilt-interpolation-ticks",2))));
+                    Math.max(0,Math.min(5,plugin.getConfig().getInt(
+                            "render.tilt-interpolation-ticks",2))));
             invokeOptional(v.chestDisplay,"setInterpolationDelay",int.class,-1);
-            matrix(v,d,rotationCorrection(v,d));
+            matrix(v,d);
             // Only the clickable attachment centre may change on tilt.
             // The visual ItemDisplay stays at the permanent vehicle root.
             if(d.inventory.chest.followTilt)moveHitbox(v,d);
@@ -218,15 +183,13 @@ final class VehicleChestRenderer {
      * scaled model coordinates. It is therefore translated BEFORE its own
      * scale and deliberately does not multiply by d.scale.
      */
-    private void matrix(VehicleInstance v,VehicleDefinition d,float relativeYaw)throws Exception{
+    private void matrix(VehicleInstance v,VehicleDefinition d)throws Exception{
         VehicleChestDefinition c=d.inventory.chest;
         MatrixOps ops=MatrixOps.INSTANCE;
         Object value=ops.constructor.newInstance();
-        // Apply turning at the same seat-anchored pivot as the tractor.
-        // Passenger world yaw stays stable; its local model rotates before
-        // translation. This eliminates per-tick entity yaw packet conflicts.
-        if(Math.abs(relativeYaw)>0.0001f)
-            ops.rotateY.invoke(value,(float)Math.toRadians(-relativeYaw));
+        // Translate first, matching VehicleRenderer.applyMatrix: all local
+        // model offsets remain fixed relative to the tractor body. The
+        // parent entity is the single owner of world yaw on steering.
         ops.translate.invoke(value,(float)-d.seatX,(float)-d.seatY,(float)-d.seatZ);
         if(c.followTilt){
             if(Math.abs(v.visualPitch)>0.001)
@@ -249,7 +212,6 @@ final class VehicleChestRenderer {
 
     void remove(VehicleInstance v){
         VehicleChestMount.reset(v);
-        v.chestLastMatrixYaw=Float.NaN;
         if(v.chestHitbox!=null){
             v.teleports.forget(v.chestHitbox);
             v.chestHitbox.remove();v.chestHitbox=null;
