@@ -3,6 +3,7 @@ package org.voxelhorizons.vehicles;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.voxelhorizons.content.ContentID;
@@ -44,7 +45,15 @@ final class VehicleStore {
                         throw new IllegalArgumentException("RGB color must be an integer between 0 and 16777215");
                     color=Integer.valueOf(rgb);
                 }
-                vehicles.put(id,new VehicleInstance(id,type,owner,new Location(world,x,y,z,yaw,0),color));
+                VehicleInstance vehicle=new VehicleInstance(id,type,owner,new Location(world,x,y,z,yaw,0),color);
+                ConfigurationSection cargo=section.getConfigurationSection(key+".storage");
+                if(cargo!=null)for(String slot:cargo.getKeys(false)){
+                    int index=Integer.parseInt(slot);
+                    if(index<0||index>=vehicle.storage.length)throw new IllegalArgumentException("Invalid storage index");
+                    ItemStack item=cargo.getItemStack(slot);
+                    if(item!=null)vehicle.storage[index]=item.clone();
+                }
+                vehicles.put(id,vehicle);
             }catch(Exception error){
                 Bukkit.getLogger().warning("[VoxelVehicles] Skipping invalid saved vehicle "+key+": "+error.getMessage());
             }
@@ -62,6 +71,10 @@ final class VehicleStore {
             config.set(k+"world",v.location.getWorld().getName());
             config.set(k+"x",v.location.getX());config.set(k+"y",v.location.getY());
             config.set(k+"z",v.location.getZ());config.set(k+"yaw",v.location.getYaw());
+            for(int i=0;i<v.storage.length;i++){
+                ItemStack stored=v.storage[i];
+                if(stored!=null&&stored.getAmount()>0)config.set(k+"storage."+i,stored.clone());
+            }
         }
         File parent=file.getParentFile();
         if(parent!=null&&!parent.exists()&&!parent.mkdirs())throw new IOException("Cannot create "+parent);

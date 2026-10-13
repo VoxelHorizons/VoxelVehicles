@@ -11,6 +11,7 @@ import java.util.logging.Level;
 public final class VoxelVehicles extends JavaPlugin {
     private VoxelCore core;
     private VehicleManager vehicles;
+    private VehicleInventories inventories;
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -26,6 +27,9 @@ public final class VoxelVehicles extends JavaPlugin {
             core=(VoxelCore)dependency;
             vehicles=new VehicleManager(this,core);
             vehicles.start();
+            inventories=new VehicleInventories(this,vehicles,core);
+            vehicles.attachInventories(inventories);
+            getServer().getPluginManager().registerEvents(inventories,this);
             getServer().getPluginManager().registerEvents(new VehicleListener(this,vehicles,core),this);
             VehicleCommand command=new VehicleCommand(vehicles,core);
             PluginCommand root=getCommand("voxelvehicles");

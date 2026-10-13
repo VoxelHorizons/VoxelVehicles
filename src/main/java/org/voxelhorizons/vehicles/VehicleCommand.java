@@ -16,8 +16,27 @@ final class VehicleCommand implements CommandExecutor,TabCompleter {
     private final VoxelCore core;
     VehicleCommand(VehicleManager vehicles,VoxelCore core){this.vehicles=vehicles;this.core=core;}
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
+        if(args.length>0&&"inventory".equalsIgnoreCase(args[0])){
+            if(!(sender instanceof Player)){sender.sendMessage("§cRequires a player.");return true;}
+            Player viewer=(Player)sender;
+            VehicleInstance selected=null;
+            if(viewer.getVehicle()!=null)
+                selected=vehicles.byEntity(viewer.getVehicle()).orElse(null);
+            if(selected==null){
+                double best=36;
+                for(VehicleInstance instance:vehicles.instances()){
+                    if(instance.location.getWorld()==null
+                            ||!instance.location.getWorld().equals(viewer.getWorld()))continue;
+                    double distance=instance.location.distanceSquared(viewer.getLocation());
+                    if(distance<best){best=distance;selected=instance;}
+                }
+            }
+            if(selected==null)viewer.sendMessage("§cNo nearby vehicle within six blocks.");
+            else if(vehicles.inventories()!=null)vehicles.inventories().open(viewer,selected);
+            return true;
+        }
         if(!sender.hasPermission("voxelvehicles.admin")){sender.sendMessage("§cNo permission.");return true;}
-        if(args.length==0){sender.sendMessage("§7/vv <list|spawn <namespace:id>|remove|reload|cleanup|sync>");return true;}
+        if(args.length==0){sender.sendMessage("§7/vv <inventory|list|spawn <namespace:id>|remove|reload|cleanup|sync>");return true;}
         String action=args[0].toLowerCase(Locale.ROOT);
         if("list".equals(action)){
             sender.sendMessage("§6VoxelVehicles: §f"+vehicles.definitions().keySet());return true;
@@ -65,9 +84,12 @@ final class VehicleCommand implements CommandExecutor,TabCompleter {
     }
 
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String label,String[] args){
+        if(!sender.hasPermission("voxelvehicles.admin")&&sender.hasPermission("voxelvehicles.inventory"))
+            return args.length==1&&"inventory".startsWith(args[0].toLowerCase(Locale.ROOT))
+                    ?Collections.singletonList("inventory"):Collections.emptyList();
         if(!sender.hasPermission("voxelvehicles.admin"))return Collections.emptyList();
         List<String> out=new ArrayList<String>();
-        if(args.length==1)out.addAll(Arrays.asList("list","spawn","remove","reload","cleanup","sync"));
+        if(args.length==1)out.addAll(Arrays.asList("inventory","list","spawn","remove","reload","cleanup","sync"));
         else if(args.length==2&&"spawn".equalsIgnoreCase(args[0]))
             for(ContentID id:vehicles.definitions().keySet())out.add(id.toString());
         String prefix=args[args.length-1].toLowerCase(Locale.ROOT);

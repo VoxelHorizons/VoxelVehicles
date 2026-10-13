@@ -23,6 +23,7 @@ public final class VehicleManager {
     private final VehicleStore store;
     private final VehicleRenderer renderer;
     private final VehicleParticles particles;
+    private VehicleInventories inventories;
     private final Map<UUID,VehicleInstance> instances=new LinkedHashMap<UUID,VehicleInstance>();
     private final Map<UUID,UUID> entityIndex=new HashMap<UUID,UUID>();
     // Dedicated hot path: never scan unloaded or parked instances each server tick.
@@ -54,6 +55,8 @@ public final class VehicleManager {
             }
         },cleanupTicks,cleanupTicks);
     }
+    void attachInventories(VehicleInventories inventories){this.inventories=inventories;}
+    VehicleInventories inventories(){return inventories;}
     public Map<ContentID,VehicleDefinition> definitions(){return Collections.unmodifiableMap(definitions);}
     public Collection<VehicleInstance> instances(){return Collections.unmodifiableCollection(instances.values());}
     public Optional<VehicleDefinition> definition(ContentID id){return Optional.ofNullable(definitions.get(id));}
@@ -157,7 +160,11 @@ public final class VehicleManager {
     }
 
     public boolean remove(VehicleInstance v){
+        if(inventories!=null)inventories.captureOpen();
+        // Prevent dropping a vehicle item while deleting its cargo.
+        if(v.hasStoredItems())return false;
         if(instances.remove(v.id)==null)return false;
+        if(inventories!=null)inventories.closeFor(v);
         occupied.remove(v.id);
         deindex(v);renderer.deactivate(v);save();return true;
     }
@@ -372,9 +379,11 @@ public final class VehicleManager {
         if(++ticks%interval==0&&dirty)save();
     }
     public void save(){
+        if(inventories!=null)inventories.captureOpen();
         try{store.save(instances);dirty=false;}catch(IOException e){plugin.getLogger().severe("Vehicle save failed: "+e.getMessage());}
     }
     void shutdown(){
+        if(inventories!=null)inventories.shutdown();
         save();
         for(VehicleInstance v:instances.values())renderer.deactivate(v);
         occupied.clear();entityIndex.clear();

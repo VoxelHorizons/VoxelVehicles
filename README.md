@@ -335,3 +335,200 @@ density and intervals to prevent excessive particle traffic. Changes to
 existing vehicles take effect on successful `/vc admin content reload`.
 The emitter config is inherited normally by child items such as a
 colored `tractor-yellow` variant.
+
+
+## Vehicle inventory overlays and GUI model previews
+
+Vehicle inventories use a **normal chest GUI**, three rows by default, allowing the resource
+pack to draw the user's existing background glyphs in the inventory title:
+`vehicle_inventory` (no storage) and `vehicle_inventory_storage` (storage).
+These are **example aliases only**, configured in `plugins/VoxelVehicles/config.yml`
+under `inventory.titles`; the Java plugin never hardcodes those alias names.
+VoxelCore's live `TextPlaceholderService` resolves the title just before opening
+the screen. All configured title offsets and glyphs are therefore hot-reloadable
+with `/vc admin content reload` and adjustable without rebuilding the plugin.
+
+The supplied mock-up uses 27 slots. The dark 3x3 preview window is left (columns 2–4),
+the right-hand cargo slots are configurable, and the actual single preview
+item is rendered at configurable slot 10 (one column to the left in the
+updated artwork), locked from clicks and drags. All GUI positions
+and title templates are editable in VoxelVehicles `config.yml`.
+
+On each vehicle definition, configure `properties.vehicle.inventory`:
+
+```yaml
+# A vehicle with three rows of storage in the right-hand panel:
+inventory:
+  enabled: true
+  storage_enabled: true
+  rows: 3
+  preview_item: voxel:tractor_icon
+
+# For a preview-only menu use rows: 0 or omit inventory.rows.
+# A vehicle can override the title for its menu type:
+# inventory:
+#   rows: 0
+#   title: "&f:offset_-8::my_custom_vehicle_gui:"
+```
+
+The optional `preview_item` is a **separate VoxelCore item definition** whose
+resource-pack model can supply an enlarged `display.gui` transformation. If
+omitted, the menu previews `vehicle.model_item`. Use the existing tractor
+model as a parent/resource-pack texture source, but give the GUI preview model
+its own `display.gui` scale, rotation and translation so that the renderer can
+bleed into the black area. **Minecraft still renders this as an inventory
+ItemStack, not as a live entity**; it will not spin with the cursor unless
+additional client functionality is added. The rendered item copies placed
+vehicle dye color if both the item and its VoxelCore definition are dyeable.
+The preview item is locked and never counted as cargo.
+
+To open a vehicle inventory, **sneak + right-click** an unoccupied
+vehicle **with any held item**; normal right-click mounts it. The pickup
+fallback intentionally ignores **all crouching arm swings** so a right-click
+animation cannot accidentally reclaim/drop the tractor; deliberate ordinary
+left clicks still pick up an empty, unoccupied vehicle. VoxelVehicles also
+processes sneaking entity interactions that other plugins pre-cancelled, with
+a targeted block/air right-click fallback for custom Interaction hitboxes. While riding,
+press **F (swap hands)** to open the vehicle menu without actually swapping
+held items, or use `/vv inventory` at any time while riding or nearby.
+The F shortcut can be disabled with `inventory.open-with-swap-hand: false`
+in `plugins/VoxelVehicles/config.yml`. The shortcut only overrides F
+for the driver of a vehicle with its GUI enabled; on foot and in other mounts,
+F continues to swap hands normally. The inventory key (normally E) opens
+the player's personal inventory entirely on the Minecraft Java client
+when mounted on an ItemDisplay, so there is no server packet or
+`InventoryOpenEvent` to intercept. Matching horse-style E behaviour
+would require a different client-visible mount type or client mod, not just
+Bukkit event handling. Permission `voxelvehicles.inventory` is granted
+to players by default. Storage and
+preview item can be configured independently per vehicle. The UI shows
+the no-storage title if `inventory.rows: 0`, and the storage variant when
+`inventory.rows` is 1–6. The visible cargo slots are determined directly
+from the `storage-slots` list in VoxelVehicles config.yml. In the updated six-column default
+layout each row adds 6 slots: 1 row = 6, 2 rows = 12, 3 rows = 18, up to
+6 rows = 36. The first three rows now use slots 3–8, 12–17 and 21–26;
+additional rows use slots 30–35, 39–44 and 48–53. Existing server
+config.yml files are NOT automatically rewritten and may still use the old
+five-column mapping; a per-vehicle `storage-slots` list overrides them.
+GUI size defaults to a minimum of three rows to preserve the existing
+preview window. A vehicle asking for four to six cargo rows opens a taller
+GUI and needs a correspondingly taller resource-pack background glyph.
+The `inventory.rows` in **VoxelVehicles config.yml** is the minimum GUI
+height; the `inventory.rows` in **VoxelCore properties.vehicle** is the
+number of available cargo rows when `storage_enabled` is true.
+
+**Independent controls:** `inventory.enabled: false` disables the **entire**
+vehicle menu, including the model preview. `storage_enabled: false` retains
+the preview menu but switches to the **no-storage title** and locks all cargo
+slots, even if `rows: 3` is still configured. Default `storage_enabled` is
+true when `rows > 0`, preserving older content. Stored cargo is never
+discarded if a vehicle is temporarily switched to preview-only; re-enable
+storage to retrieve items. Nonempty cargo also continues to block vehicle pickup.
+
+Vehicle storage is saved in `vehicles.yml` under the stable per-instance
+UUID, using Bukkit ItemStack serialization. The current version supports a
+single viewer per vehicle inventory. Shift-clicking between the player inventory and vehicle cargo now
+works by moving items only into **authorized cargo slots**; cosmetic fillers
+and the vehicle preview can never be used as storage. Manual cargo placement
+and extraction continue to work. Double-click collection is also guarded. Pickup/removal of a
+vehicle containing cargo is blocked so players cannot lose contents.
+The menu does not currently migrate cargo into the picked-up vehicle item.
+
+The new system introduces no client mod, fake horse, or server-rendered GUI
+entities. Because the preview uses vanilla item rendering, your resource pack
+must do the GUI scale/translation work.
+
+### Invisible fill item and preview alignment
+
+`plugins/VoxelVehicles/config.yml` supports a global `inventory.fill-item`
+setting to display an invisible VoxelCore item in every locked/decorative
+inventory slot. Set `fill-item: ""` to turn it off. An item ID such as
+`voxel:ui-blank` or its uniquely identifiable model path such as
+`voxel:ui/blank` is accepted; if a model path is ambiguous, specify
+the actual registered item ID instead. Decorative filler stacks are
+cloned, are never persisted as cargo, and cannot be taken by clicks,
+hotbar swaps, double-click collection, drag, or shift-click. The setting
+is optional and the actual model must be an authored and registered
+VoxelCore item, not just an unregistered resource-pack JSON.
+
+The preview item slot uses `inventory.preview-slot`; for the updated
+left-shifted artwork set it to `10` (zero-based, second column, middle
+row), instead of the previous `11`. This is not hardcoded Java logic.
+Both `preview-slot` and `fill-item` may now be specified either in
+`plugins/VoxelVehicles/config.yml` for all vehicles **or** in the
+individual VoxelCore `properties.vehicle.inventory` to override the global
+default. The per-vehicle keys intentionally use hyphens, matching the
+existing plugin configuration and the user's YAML. Children inheriting
+the parent's vehicle properties (e.g. `tractor-yellow`) can retain the
+same custom overrides, so a color variant needs no duplication.
+
+```yaml
+# In farming.yml -> items.tractor.properties.vehicle.inventory
+inventory:
+  enabled: true
+  storage_enabled: true
+  rows: 3
+  preview_item: voxel:tractor_icon
+  preview-slot: 10
+  fill-item: "voxel:ui/blank"
+  storage_title: "&f:offset_-8::vehicle_inventory_storage::offset_-170:&rTractor"
+  title: "&f:offset_-8::vehicle_inventory:&rTractor"
+```
+
+The per-vehicle `fill-item: ""` disables the filler even if the global
+configuration supplies one. When a per-vehicle `preview-slot` overlaps a
+cargo slot or falls outside the current GUI size, the inventory will
+report an invalid layout instead of silently hiding or deleting cargo.
+Shift-click from player inventory now only deposits to configured free
+cargo slots, combining stacks where possible; shift-clicking from
+cargo returns items to the player's inventory. When storage is disabled,
+shift-click does not alter the preview or the fillers.
+
+```yaml
+inventory:
+  rows: 3
+  preview-slot: 10
+  fill-item: "voxel:ui/blank"
+  titles:
+    without-storage: "&f:offset_-8::vehicle_inventory:"
+    with-storage: "&f:offset_-8::vehicle_inventory_storage:"
+```
+
+
+### Vehicle-specific cargo layout and filler hover tooltip
+
+An existing server config may still have only five cargo slots per row.
+The new default is **six**, but an existing `config.yml` is not overwritten
+when VoxelVehicles updates. In that case, the custom vehicle can explicitly
+define the desired six-column mapping under `properties.vehicle.inventory`:
+
+```yaml
+inventory:
+  enabled: true
+  storage_enabled: true
+  rows: 3
+  preview-slot: 10
+  preview_item: voxel:tractor_icon
+  fill-item: "voxel:ui/blank"
+  fill-copy-preview-meta: true
+  storage-slots: [3, 4, 5, 6, 7, 8, 12, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25, 26]
+```
+
+The per-vehicle `storage-slots` list takes priority over the global
+`inventory.storage-slots` in `plugins/VoxelVehicles/config.yml`. Any
+configured slot in the first `rows` rows becomes genuine storage and is
+never populated with a filler. Thus 3, 12 **and 23** all become usable
+cargo slots in this example. The currently active layout can be verified
+by manually placing an item and confirming it survives closing/reopening.
+
+`fill-copy-preview-meta: true` (global default) copies only the preview
+ItemStack's **display name and lore** onto a cloned invisible filler item.
+It does **not** copy the preview model, VoxelCore identifier, model
+components or other render data. This makes hovering the black preview panel
+feel like hovering the actual vehicle icon. Set the value to `false` globally
+or per vehicle if you want filler tooltips to remain independent.
+
+The default driving shortcut remains F (swap hands), or `/vv inventory`.
+The E inventory key is client-handled for ItemDisplay mounts, so a Paper
+listener cannot replace it with a server menu; a different client-visible
+mount type or client mod is needed for native E integration.

@@ -24,6 +24,7 @@ public final class VehicleDefinition {
     public final double wheelbase, trackWidth, maxPitch, maxRoll, tiltSmoothing;
     public final double gravity,terminalVelocity,airDrag,airbornePitchFactor;
     public final List<VehicleParticleEmitter> particles;
+    public final VehicleInventoryDefinition inventory;
 
     private VehicleDefinition(ContentID id, ContentID model, ContentID drop, Type type, boolean publicAccess,
             double width, double height, double hitboxX, double hitboxY, double hitboxZ,
@@ -34,7 +35,7 @@ public final class VehicleDefinition {
             double flySpeed, double climbSpeed, float viewDistance,
             double wheelbase,double trackWidth,double maxPitch,double maxRoll,double tiltSmoothing,
             double gravity,double terminalVelocity,double airDrag,double airbornePitchFactor,
-            List<VehicleParticleEmitter> particles) {
+            List<VehicleParticleEmitter> particles,VehicleInventoryDefinition inventory) {
         this.id=id; this.model=model; this.drop=drop; this.type=type; this.publicAccess=publicAccess;
         this.width=width; this.height=height; this.hitboxX=hitboxX; this.hitboxY=hitboxY; this.hitboxZ=hitboxZ;
         this.collisionWidth=collisionWidth;this.collisionHeight=collisionHeight;
@@ -49,12 +50,13 @@ public final class VehicleDefinition {
         this.gravity=gravity;this.terminalVelocity=terminalVelocity;
         this.airDrag=airDrag;this.airbornePitchFactor=airbornePitchFactor;
         this.particles=particles;
+        this.inventory=inventory;
     }
     public static Optional<VehicleDefinition> parse(ItemDefinition item) {
         Object raw = item.properties().get("vehicle");
         if (raw == null) return Optional.empty();
         Map<?,?> m = map(item,raw,"vehicle");
-        keys(item,m,"vehicle","type","public","model_item","drop","hitbox","collision","scale","offset","seat","physics","suspension","particles","view_distance");
+        keys(item,m,"vehicle","type","public","model_item","drop","hitbox","collision","scale","offset","seat","physics","suspension","particles","inventory","view_distance");
         Type type;
         try { type=Type.valueOf(String.valueOf(m.containsKey("type")?m.get("type"):"LAND").toUpperCase(java.util.Locale.ROOT)); }
         catch (IllegalArgumentException ex) { throw bad(item,"unknown vehicle type"); }
@@ -102,7 +104,8 @@ public final class VehicleDefinition {
                 num(item,p,"terminal_velocity",1.6,0.1,3.0),
                 num(item,p,"air_drag",0.99,0.8,1.0),
                 num(item,suspension,"airborne_pitch_factor",0.8,0,2),
-                VehicleParticleEmitter.parse(item.id(),m.get("particles"))));
+                VehicleParticleEmitter.parse(item.id(),m.get("particles")),
+                VehicleInventoryDefinition.parse(item.id(),m.get("inventory"))));
     }
     private static ContentID ref(ItemDefinition item,Object value) {
         if(value==null)return item.id();

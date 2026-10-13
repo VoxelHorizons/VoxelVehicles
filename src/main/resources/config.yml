@@ -16,3 +16,75 @@ render:
 # 600 ticks = 30 seconds. Minimum is 100 ticks (5 seconds).
 maintenance:
   cleanup-ticks: 600
+
+# Chest GUI: title glyphs are resolved by VoxelCore at open time.
+# These are defaults only: change them to any authored VoxelCore font aliases.
+inventory:
+  # Press F (swap hands) while riding to open this vehicle's menu.
+  # E opens the personal inventory client-side on ItemDisplay mounts and
+  # cannot be intercepted by Bukkit without changing the client entity type.
+  open-with-swap-hand: true
+  # Minimum chest GUI height to fit the model preview panel. Individual
+  # vehicles choose storage row count with properties.vehicle.inventory.rows.
+  rows: 3
+  titles:
+    without-storage: "&f:offset_-8::vehicle_inventory:"
+    with-storage: "&f:offset_-8::vehicle_inventory_storage:"
+
+  # Your shifted overlay puts the preview one column further LEFT.
+  # Slot indices are 0-based: 10 = middle row, second column.
+  # To fill the preview panel, give its model an enlarged display.gui transform.
+  preview-slot: 10
+
+  # Render an invisible VoxelCore item in every protected slot (all slots
+  # except the preview and enabled cargo). This prevents stray shift-clicks
+  # from treating decorative slots as empty. Accepts an item ID OR a model
+  # reference; the latter resolves to its uniquely matching VoxelCore item.
+  # Set to "" to leave decorative slots empty (still protected).
+  fill-item: "voxel:ui/blank"
+  # Give invisible fillers the same hover display name/lore as the preview.
+  # They retain their original transparent model and never become cargo.
+  fill-copy-preview-meta: true
+
+  # Six cargo slots per row for the updated resource-pack overlay.
+  # This can be overridden by each vehicle's properties.vehicle.inventory
+  # storage-slots setting; old config.yml files must be updated manually.
+  # Rows 4-6 require extended resource-pack background overlays.
+  storage-slots:
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 12
+    - 13
+    - 14
+    - 15
+    - 16
+    - 17
+    - 21
+    - 22
+    - 23
+    - 24
+    - 25
+    - 26
+    # Optional fourth through sixth rows:
+    - 30
+    - 31
+    - 32
+    - 33
+    - 34
+    - 35
+    - 39
+    - 40
+    - 41
+    - 42
+    - 43
+    - 44
+    - 48
+    - 49
+    - 50
+    - 51
+    - 52
+    - 53

@@ -2,6 +2,7 @@ package org.voxelhorizons.vehicles;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
+import org.bukkit.inventory.ItemStack;
 import org.voxelhorizons.content.ContentID;
 import java.util.UUID;
 
@@ -20,6 +21,13 @@ public final class VehicleInstance {
     /** Cosmetic terrain suspension only; never rotates the physical hitbox or rider. */
     public double visualPitch,visualRoll;
     public VehiclePhysics.Input input=VehiclePhysics.Input.NEUTRAL;
+    /** Logical per-vehicle cargo, saved independently from display entities. */
+    final ItemStack[] storage=new ItemStack[54];
+
+    boolean hasStoredItems(){
+        for(ItemStack stack:storage)if(stack!=null&&stack.getAmount()>0)return true;
+        return false;
+    }
     public VehicleInstance(UUID id,ContentID type,UUID owner,Location location) {
         this(id,type,owner,location,null);
     }
