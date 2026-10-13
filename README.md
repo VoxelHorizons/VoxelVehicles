@@ -260,3 +260,78 @@ future improvement.
 Validation: test forward and reverse departures, drops onto full blocks and
 slabs, ledges bordering unloaded chunks, and landing immediately after driving
 over a one-block obstacle on Paper 26.2.
+
+
+## Configurable per-vehicle particle emitters (smoke, exhaust, effects)
+
+Add `particles:` **directly under** `properties.vehicle`. It is a list, so
+each vehicle can define several exhaust pipes, thrusters or decorative effects.
+These are ordinary Minecraft particles; no new entities are spawned.
+
+For the existing tractor, add this alongside `physics` and `suspension`:
+
+```yaml
+particles:
+  - particle: SMOKE
+    when: OCCUPIED
+    interval_ticks: 4
+    count: 2
+    offset: {x: 0.0, y: 1.5, z: 1.2}
+    spread: {x: 0.04, y: 0.08, z: 0.04}
+    speed: 0.015
+    follow_tilt: true
+```
+
+For a car with **two rear exhaust outlets**, use (adjust widths to fit the model):
+
+```yaml
+particles:
+  - particle: SMOKE
+    when: MOVING
+    interval_ticks: 5
+    count: 1
+    offset: {x: -0.6, y: -0.35, z: -1.3}
+  - particle: SMOKE
+    when: MOVING
+    interval_ticks: 5
+    count: 1
+    offset: {x: 0.6, y: -0.35, z: -1.3}
+```
+
+Offsets use **Minecraft blocks**, relative to the vehicle's **visual model
+origin after its existing `vehicle.offset`**, before local yaw/tilt. At yaw
+0, **+Z is forward**, **-Z is behind**, and +Y is up. These offsets are
+already in world-block units, **not Blockbench pixels**, and are not
+multiplied by `vehicle.scale`. Turn the vehicle to confirm each exhaust
+pipe's position, then tune x/y/z to match the resource-pack model.
+
+### Emitter keys
+
+| Key | Default | Purpose |
+|---|---|---|
+| `particle` | Required | Vanilla particle name (e.g. `SMOKE`, `FLAME`, `CLOUD`, `CAMPFIRE_COSY_SMOKE` if supported) |
+| `offset` | `{x: 0, y: 0, z: 0}` | Local world-block emission position, follows vehicle yaw and `vehicle.offset.rotation` |
+| `when` | `OCCUPIED` | `ALWAYS`, `OCCUPIED`, `MOVING`, or `IDLE` |
+| `min_speed` | `0.025` | Blocks/tick threshold separating moving from idling |
+| `interval_ticks` | `4` | Emission period, 2–200 ticks (20 ticks = 1 second) |
+| `count` | `1` | Particle count per burst, 1–16 |
+| `spread` | `{x: 0.03, y: 0.04, z: 0.03}` | Random per-axis spawn spread in blocks |
+| `speed` | `0.015` | Particle-specific extra speed |
+| `follow_tilt` | `true` | Follow cosmetic tractor nose pitch/roll while driving/falling |
+
+`OCCUPIED` emits while a driver is seated, including at idle, and stops
+on dismount. `MOVING` emits only while driven faster than `min_speed`;
+`IDLE` emits only below that threshold with a driver seated. `ALWAYS`
+emits from parked loaded vehicles as well (e.g. enchanted machinery).
+Particle aliases `SMOKE`/`SMOKE_NORMAL` map to whichever supported name
+exists on the running server. Particles requiring block, item or dust data
+are not supported yet and are rejected on content load with a clear error.
+
+The main-thread manager tick drives particles after physics and visual
+suspension updates. There is **no separate particle task per vehicle**;
+only loaded, active instances emit, and the server does not load chunks
+to display effects. Maximum eight emitters per definition, with bounded
+density and intervals to prevent excessive particle traffic. Changes to
+existing vehicles take effect on successful `/vc admin content reload`.
+The emitter config is inherited normally by child items such as a
+colored `tractor-yellow` variant.
