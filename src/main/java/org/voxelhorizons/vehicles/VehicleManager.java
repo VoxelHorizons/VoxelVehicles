@@ -5,6 +5,7 @@ import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 import org.bukkit.inventory.ItemStack;
@@ -210,6 +211,60 @@ public final class VehicleManager {
         occupied.remove(v.id);
         deindex(v);renderer.deactivate(v);save();return true;
     }
+    /**
+     * Reclaim a vehicle together with its attached chest and every cargo slot.
+     *
+     * Captures/closes any open GUI before taking the drop snapshot. Drops are
+     * spawned while the vehicle is still present; if world spawning or
+     * persistence fails, spawned items are rolled back and the vehicle stays.
+     * A successful save removes the vehicle from durable storage *before*
+     * removing its in-memory renderer, preventing the removed instance from
+     * being restored after a normal restart.
+     *
+     * Must run on the main server thread, like all inventory and world calls.
+     */
+    boolean collect(VehicleInstance v,ItemStack vehicleItem){
+        if(v==null||instances.get(v.id)!=v||v.driver!=null
+                ||v.location.getWorld()==null
+                ||vehicleItem==null||vehicleItem.getAmount()<=0)return false;
+        if(inventories!=null)inventories.closeFor(v);
+        List<ItemStack> drops;
+        try{
+            drops=VehiclePickupDrops.snapshot(v,vehicleItem);
+        }catch(IllegalArgumentException exception){
+            plugin.getLogger().warning("Cannot prepare pickup of "+v.id+": "+exception.getMessage());
+            return false;
+        }
+        List<Item> spawned=Collections.emptyList();
+        try{
+            spawned=VehiclePickupDrops.spawn(v.location.getWorld(),v.location,drops);
+            // Do not allow another player's open vehicle GUI to be saved with
+            // stale content while serializing the pickup.
+            if(inventories!=null)inventories.captureOpen();
+            Map<UUID,VehicleInstance> remaining=new LinkedHashMap<UUID,VehicleInstance>(instances);
+            remaining.remove(v.id);
+            store.save(remaining);
+        }catch(IOException|RuntimeException error){
+            VehiclePickupDrops.rollback(spawned);
+            plugin.getLogger().warning("Vehicle pickup cancelled; unable to drop/save "+v.id+": "
+                    +error.getMessage());
+            return false;
+        }
+        instances.remove(v.id);
+        chunkIndex.remove(v.id);
+        clickIndex.remove(v.id);
+        occupied.remove(v.id);
+        deindex(v);
+        try{
+            renderer.deactivate(v);
+        }catch(RuntimeException error){
+            plugin.getLogger().warning("Could not remove collected vehicle renderer "+v.id+": "
+                    +error.getMessage());
+        }
+        dirty=false;
+        return true;
+    }
+
     /** Install only one chest on vehicles explicitly configured to accept upgrades. */
     boolean installChest(VehicleInstance v,ItemStack source){
         VehicleDefinition d=definitions.get(v.type);
