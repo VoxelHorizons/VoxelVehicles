@@ -71,6 +71,7 @@ final class VehicleChestRenderer {
             v.teleports.forget(v.chestHitbox);
             v.chestHitbox.remove();v.chestHitbox=null;
         }
+        VehicleChestMount.allowRetry(v);
         move(v,d);
     }
 
