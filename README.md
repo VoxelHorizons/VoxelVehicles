@@ -765,3 +765,26 @@ A mounted count equal to the number of active chest displays confirms that
 the shared-client-movement path is in use. This does not automatically
 guarantee smooth rendering for every client/protocol implementation; verify
 in-game while steering, driving up slopes, dismounting and re-entering.
+
+
+### Chest vibration when steering (PR #15)
+
+For passenger-linked chest displays, the tractor ItemDisplay remains the
+only entity teleported as the vehicle turns. The chest previously received
+independent `setRotation` updates on every turning tick; Minecraft clients
+may interpolate those updates differently from the parent render root,
+causing minor shaking.
+
+Mounted chests now keep their yaw anchor from when they joined the tractor.
+The offset/model is turned around the **same seat-anchored pivot**, using a
+normalized shortest-arc yaw correction inside its local display matrix.
+No extra passenger entity teleports or entity rotation packets are sent.
+The correction is refreshed only while the heading changes, and JOML method
+lookups are cached to keep hundreds of moving vehicles affordable.
+
+The feature requires no configuration changes. `attach_to_vehicle: false`
+remains a compatibility fallback for clients/servers where display-passenger
+rendering misbehaves. To test, drive slowly in circles in both directions,
+cross the +/-180 and 0/360 yaw boundaries, and look for any attachment
+vibration while the tractor remains smooth. This update needs live client
+confirmation; automated tests cannot prove client-side render stability.
