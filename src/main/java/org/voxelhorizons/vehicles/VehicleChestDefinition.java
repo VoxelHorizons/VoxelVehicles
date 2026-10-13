@@ -13,23 +13,24 @@ final class VehicleChestDefinition {
     final VisualMode mode;
     final ContentID visualItem,alternateModel;
     final double x,y,z,scale,yaw;
-    final boolean followTilt,interaction;
+    final boolean followTilt,interaction,attachToVehicle;
     final double clickWidth,clickHeight;
 
     private VehicleChestDefinition(boolean enabled,Material item,VisualMode mode,
             ContentID visualItem,ContentID alternateModel,
             double x,double y,double z,double scale,double yaw,boolean followTilt,
-            boolean interaction,double clickWidth,double clickHeight){
+            boolean interaction,boolean attachToVehicle,double clickWidth,double clickHeight){
         this.enabled=enabled;this.item=item;this.mode=mode;
         this.visualItem=visualItem;this.alternateModel=alternateModel;
         this.x=x;this.y=y;this.z=z;this.scale=scale;this.yaw=yaw;
         this.followTilt=followTilt;this.interaction=interaction;
+        this.attachToVehicle=attachToVehicle;
         this.clickWidth=clickWidth;this.clickHeight=clickHeight;
     }
 
     static VehicleChestDefinition parse(ContentID owner,Object raw){
         if(raw==null)return new VehicleChestDefinition(false,Material.CHEST,
-                VisualMode.NONE,null,null,0,0,0,1,0,false,false,0.8,0.8);
+                VisualMode.NONE,null,null,0,0,0,1,0,false,false,false,0.8,0.8);
         Map<?,?> m=mapping(owner,raw,"chest");
         // Legacy chest.slot is intentionally ignored: there is no GUI button.
         // Accept older YAML so existing worlds don't fail plugin startup.
@@ -46,7 +47,7 @@ final class VehicleChestDefinition {
         if(m.containsKey("slot"))integer(owner,m,"slot",0,0,53);
         Map<?,?> visual=mapping(owner,m.get("visual"),"chest.visual");
         keys(owner,visual,"chest.visual","mode","item","model_item","offset","scale",
-                "yaw","follow_tilt","interaction","interaction_width","interaction_height");
+                "yaw","follow_tilt","interaction","attach_to_vehicle","interaction_width","interaction_height");
         VisualMode mode;
         try{mode=VisualMode.valueOf(String.valueOf(visual.containsKey("mode")
                 ?visual.get("mode"):"ITEM_DISPLAY").toUpperCase(Locale.ROOT));}
@@ -59,13 +60,14 @@ final class VehicleChestDefinition {
         keys(owner,offset,"chest.visual.offset","x","y","z");
         boolean tilt=bool(owner,visual,"follow_tilt",true);
         boolean interaction=bool(owner,visual,"interaction",true);
+        boolean attach=bool(owner,visual,"attach_to_vehicle",true);
         return new VehicleChestDefinition(enabled,material,mode,itemId,alternative,
                 number(owner,offset,"x",0,-16,16),
                 number(owner,offset,"y",0,-16,16),
                 number(owner,offset,"z",0,-16,16),
                 number(owner,visual,"scale",1,0.01,16),
                 number(owner,visual,"yaw",0,-360,360),
-                tilt,interaction&&mode==VisualMode.ITEM_DISPLAY,
+                tilt,interaction&&mode==VisualMode.ITEM_DISPLAY,attach,
                 number(owner,visual,"interaction_width",0.8,0.1,5),
                 number(owner,visual,"interaction_height",0.8,0.1,5));
     }
