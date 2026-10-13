@@ -12,6 +12,13 @@ public final class VoxelVehicles extends JavaPlugin {
     private VoxelCore core;
     private VehicleManager vehicles;
     private VehicleInventories inventories;
+    private VehicleProtection protection;
+
+    @Override public void onLoad(){
+        VehicleProtection.registerWorldGuardFlags(this);
+    }
+
+    VehicleProtection protection(){return protection;}
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -25,6 +32,7 @@ public final class VoxelVehicles extends JavaPlugin {
             org.bukkit.entity.EntityType.valueOf("ITEM_DISPLAY");
             org.bukkit.entity.EntityType.valueOf("INTERACTION");
             core=(VoxelCore)dependency;
+            protection=new VehicleProtection(this);
             vehicles=new VehicleManager(this,core);
             vehicles.start();
             inventories=new VehicleInventories(this,vehicles,core);
