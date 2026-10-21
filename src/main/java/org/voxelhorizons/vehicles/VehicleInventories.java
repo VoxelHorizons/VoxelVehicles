@@ -51,6 +51,9 @@ final class VehicleInventories implements Listener {
                 &&!player.hasPermission("voxelvehicles.admin")){
             player.sendMessage("§cYou cannot use vehicle inventories.");return false;
         }
+        if(!plugin.protection().allows(player,vehicle.location,VehicleProtection.Action.INVENTORY)){
+            player.sendMessage("§cYou cannot open vehicle storage in this region.");return false;
+        }
         if(!definition.publicAccess&&!vehicle.owner.equals(player.getUniqueId())
                 &&!player.hasPermission("voxelvehicles.admin")){
             player.sendMessage("§cThis vehicle is private.");return false;

@@ -93,3 +93,8 @@ inventory:
     - 51
     - 52
     - 53
+
+# Optional region hooks; restrictions from WorldGuard and Lands both apply.
+protection:
+  worldguard: true
+  lands: true
