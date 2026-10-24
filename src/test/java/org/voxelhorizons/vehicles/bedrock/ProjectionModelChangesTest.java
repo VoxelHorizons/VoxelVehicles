@@ -19,6 +19,17 @@ public final class ProjectionModelChangesTest {
         return root;
     }
 
+    @Test public void tracksChestDisplayModels() {
+        UUID visual=UUID.randomUUID(),chest=UUID.randomUUID();
+        Map<String,Object> feed=feed(visual,"voxel:tractor");
+        @SuppressWarnings("unchecked")
+        Map<String,Object> row=(Map<String,Object>)((List<Object>)feed.get("vehicles")).get(0);
+        row.put("chest_model_item","voxel:tractor_chest");
+        @SuppressWarnings("unchecked") Map<String,Object> links=(Map<String,Object>)row.get("entity_links");
+        links.put("chest_display",chest.toString());
+        assertEquals("voxel:tractor_chest",ProjectionModelChanges.visualModels(feed,"vehicles").get(chest));
+    }
+
     @Test public void reportsRootVisualModelSwapOnly() {
         UUID visual=UUID.randomUUID();
         Map<UUID,String> before=ProjectionModelChanges.visualModels(feed(visual,"voxel:tractor"),"vehicles");

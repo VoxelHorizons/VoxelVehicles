@@ -24,6 +24,7 @@ final class ProjectionModelChanges {
             Map<String,Object> link=(Map<String,Object>)links;
             put(models,link.get("display_entity_uuid"),row.get("model_item"));
             put(models,link.get("visual"),row.get("model_item"));
+            put(models,link.get("chest_display"),row.get("chest_model_item"));
             Object parts=link.get("parts");
             if(!(parts instanceof List))continue;
             for(Object partObject:(List<Object>)parts) {

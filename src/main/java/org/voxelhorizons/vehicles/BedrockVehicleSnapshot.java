@@ -65,6 +65,13 @@ public final class BedrockVehicleSnapshot {
             state.put("hitbox",xyz(definition.width,definition.height,0));
             state.put("hitbox_offset",xyz(definition.hitboxX,definition.hitboxY,definition.hitboxZ));
             state.put("seat_offset",xyz(definition.seatX,definition.seatY,definition.seatZ));
+            // Chest accessory display model (ITEM_DISPLAY mode with a VoxelCore item only),
+            // so the Geyser bridge can give the chest its own native entity.
+            VehicleChestDefinition chest=definition.inventory==null?null:definition.inventory.chest;
+            boolean chestModel=chest!=null&&chest.enabled&&chest.mode==VehicleChestDefinition.VisualMode.ITEM_DISPLAY
+                    &&chest.visualItem!=null;
+            state.put("chest_model_item",chestModel?chest.visualItem.toString():null);
+            state.put("chest_scale",chestModel?Double.valueOf(chest.scale):null);
             // Paper alone handles collision, inventories and rider permissions.
             Map<String,Object> linked=new LinkedHashMap<String,Object>();
             linked.put("visual",id(vehicle.display));
