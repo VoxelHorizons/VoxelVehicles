@@ -9,7 +9,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
@@ -24,14 +28,19 @@ public final class BedrockProjectionPublisher {
     private static final Gson JSON = new GsonBuilder().disableHtmlEscaping().create();
     private final JavaPlugin plugin;
     private final Path output;
+    private final String kind;
+    private final BedrockEntityResender resender;
+    private Map<UUID,String> lastModels=Collections.emptyMap();
+    /** Model changes not yet re-sent; guarded by ioLock. */
+    private final Set<UUID> pendingResend=new HashSet<UUID>();
     private final Object ioLock = new Object();
     private final AtomicLong sequence = new AtomicLong();
     private volatile boolean closed;
     private byte[] lastRequested;
     private long lastRequestTime;
 
-    private BedrockProjectionPublisher(JavaPlugin plugin,Path output) {
-        this.plugin=plugin;this.output=output;
+    private BedrockProjectionPublisher(JavaPlugin plugin,Path output,String kind,BedrockEntityResender resender) {
+        this.plugin=plugin;this.output=output;this.kind=kind;this.resender=resender;
     }
 
     public static BedrockProjectionPublisher start(JavaPlugin plugin,String kind,
@@ -57,7 +66,9 @@ public final class BedrockProjectionPublisher {
         if (!"furniture".equals(kind) && !"vehicles".equals(kind))
             throw new IllegalArgumentException("Unexpected projection category "+kind);
         BedrockProjectionPublisher publisher = new BedrockProjectionPublisher(plugin,
-                geyser.resolve("voxelcore-projection").resolve(kind+".json"));
+                geyser.resolve("voxelcore-projection").resolve(kind+".json"),kind,
+                plugin.getConfig().getBoolean("bedrock.projection.resend-on-model-change",true)
+                        ? BedrockEntityResender.create(plugin) : null);
         int ticks=Math.max(1,Math.min(200,plugin.getConfig().getInt("bedrock.projection.interval-ticks",5)));
         plugin.getServer().getScheduler().runTaskTimer(plugin,()->{
             try { publisher.submit(snapshot.get()); }
@@ -80,15 +91,36 @@ public final class BedrockProjectionPublisher {
         long now=System.currentTimeMillis();
         if (Arrays.equals(lastRequested,bytes) && now-lastRequestTime<10000L) return;
         lastRequested=bytes; lastRequestTime=now;
+        Map<UUID,String> models=ProjectionModelChanges.visualModels(snapshot,kind);
+        Set<UUID> changed=ProjectionModelChanges.changed(lastModels,models);
+        lastModels=models;
+        if (resender!=null && !changed.isEmpty())
+            synchronized(ioLock) { pendingResend.addAll(changed); }
         long revision=sequence.incrementAndGet();
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin,()->{
             synchronized(ioLock) {
                 if (closed || revision!=sequence.get()) return;
-                try { publishAtomically(output,bytes); }
+                try {
+                    publishAtomically(output,bytes);
+                    scheduleResend();
+                }
                 catch (IOException failure) {
                     plugin.getLogger().warning("Bedrock projection file update failed: "+failure.getMessage());
                 }
             }
+        });
+    }
+
+    /** Under ioLock, after the feed holding the new model is on disk, so Geyser's
+     * spawn handler reads the new definition when the entity is re-sent. */
+    private void scheduleResend() {
+        if (pendingResend.isEmpty() || closed) return;
+        final Set<UUID> batch=new HashSet<UUID>(pendingResend);
+        pendingResend.clear();
+        plugin.getServer().getScheduler().runTask(plugin,()->{
+            if (closed) return;
+            int sent=resender.resend(batch);
+            if (sent>0) plugin.getLogger().fine("Re-sent "+sent+" Bedrock display views after model change");
         });
     }
 

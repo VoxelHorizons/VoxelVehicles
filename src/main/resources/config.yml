@@ -105,3 +105,7 @@ bedrock:
     # Main-thread capture interval; writes are asynchronous and changes coalesce.
     # Heartbeat rewrites unchanged state every 10 seconds (stale snapshots expire).
     interval-ticks: 5
+    # Geyser fixes a Bedrock entity's model at spawn. When a vehicle's model changes,
+    # re-send it (hide/show, 1.18+) to Bedrock viewers so the new model is applied.
+    # Without a local Geyser API every viewer is re-sent (brief Java flicker).
+    resend-on-model-change: true
