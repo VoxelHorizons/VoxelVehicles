@@ -93,3 +93,15 @@ inventory:
     - 51
     - 52
     - 53
+
+# Paper remains authoritative; this feed contains only visual state and Paper
+# entity UUIDs for a Geyser extension, never inventory contents/permissions.
+bedrock:
+  projection:
+    enabled: true
+    # Empty auto-detects a loaded local Geyser-Spigot plugin's data directory.
+    # For proxy/remote Geyser use a mount to the ACTUAL Geyser data folder.
+    geyser-data-directory: ''
+    # Main-thread capture interval; writes are asynchronous and changes coalesce.
+    # Heartbeat rewrites unchanged state every 10 seconds (stale snapshots expire).
+    interval-ticks: 5
