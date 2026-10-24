@@ -36,13 +36,19 @@ final class ProjectionModelChanges {
         return models;
     }
 
-    /** Entities present in both snapshots whose model differs. New or removed entities
-     * need no re-send: Paper spawns/removes them and Geyser translates that itself. */
+    /**
+     * Entities to re-send once this snapshot is on disk: displays whose model changed, and
+     * displays that appeared since the previous snapshot. Paper spawns a new display (placement,
+     * model swap) before the feed listing it is written, so Geyser's spawn hook could not map
+     * it yet. Removed entities need nothing; the very first snapshot re-sends nothing because
+     * there is no earlier spawn to correct beyond what chunk loading already covers.
+     */
     static Set<UUID> changed(Map<UUID,String> previous,Map<UUID,String> next) {
         Set<UUID> result=new HashSet<UUID>();
+        if(previous.isEmpty())return result;
         for(Map.Entry<UUID,String> entry:next.entrySet()) {
             String before=previous.get(entry.getKey());
-            if(before!=null && !before.equals(entry.getValue()))result.add(entry.getKey());
+            if(before==null || !before.equals(entry.getValue()))result.add(entry.getKey());
         }
         return result;
     }

@@ -27,5 +27,10 @@ public final class ProjectionModelChangesTest {
         assertEquals(Collections.singleton(visual),ProjectionModelChanges.changed(before,after));
         assertTrue(ProjectionModelChanges.changed(before,before).isEmpty());
         assertTrue(ProjectionModelChanges.changed(Collections.<UUID,String>emptyMap(),after).isEmpty());
+        UUID spawned=UUID.randomUUID();
+        Map<UUID,String> withNew=new HashMap<UUID,String>(before);
+        withNew.putAll(ProjectionModelChanges.visualModels(feed(spawned,"voxel:boat"),"vehicles"));
+        assertEquals("New vehicles are re-sent once the feed lists them",
+                Collections.singleton(spawned),ProjectionModelChanges.changed(before,withNew));
     }
 }
