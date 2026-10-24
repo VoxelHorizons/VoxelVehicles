@@ -4,6 +4,7 @@ import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.voxelhorizons.VoxelCore;
+import org.voxelhorizons.vehicles.bedrock.BedrockProjectionPublisher;
 
 import java.util.logging.Level;
 
@@ -12,6 +13,7 @@ public final class VoxelVehicles extends JavaPlugin {
     private VoxelCore core;
     private VehicleManager vehicles;
     private VehicleInventories inventories;
+    private BedrockProjectionPublisher bedrockPublisher;
 
     @Override public void onEnable() {
         saveDefaultConfig();
@@ -37,6 +39,8 @@ public final class VoxelVehicles extends JavaPlugin {
             root.setExecutor(command);root.setTabCompleter(command);
             boolean nativeInputs=VehicleInputAdapter.register(this,vehicles);
             if(!nativeInputs)getLogger().warning("PlayerInputEvent missing: vehicle driving is disabled on this older server. Placement and storage remain available.");
+            bedrockPublisher = BedrockProjectionPublisher.start(this,"vehicles",
+                    () -> vehicles.bedrockSnapshot().asMap());
             getLogger().info("Loaded "+vehicles.definitions().size()+" vehicles from VoxelCore and "+
                     vehicles.instances().size()+" placed vehicles. Native driving: "+nativeInputs);
         }catch(RuntimeException e){
@@ -44,7 +48,7 @@ public final class VoxelVehicles extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
         }
     }
-    @Override public void onDisable(){if(vehicles!=null)vehicles.shutdown();}
+    @Override public void onDisable(){if(bedrockPublisher!=null)bedrockPublisher.close();if(vehicles!=null)vehicles.shutdown();}
     VoxelCore core(){return core;}
     public VehicleManager getVehicleManager(){return vehicles;}
 }
