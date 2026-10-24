@@ -65,8 +65,15 @@ public final class BedrockProjectionPublisher {
         }
         if (!"furniture".equals(kind) && !"vehicles".equals(kind))
             throw new IllegalArgumentException("Unexpected projection category "+kind);
+        // Several backends behind one proxy share a mounted Geyser folder: give each a feed id
+        // so they write furniture-<id>.json / vehicles-<id>.json instead of overwriting.
+        String feedId=plugin.getConfig().getString("bedrock.projection.feed-id","").trim();
+        if (!feedId.isEmpty() && !feedId.matches("[a-z0-9_-]{1,32}")) {
+            plugin.getLogger().warning("Bedrock state projection not enabled: feed-id must match [a-z0-9_-]{1,32}");
+            return null;
+        }
         BedrockProjectionPublisher publisher = new BedrockProjectionPublisher(plugin,
-                geyser.resolve("voxelcore-projection").resolve(kind+".json"),kind,
+                geyser.resolve("voxelcore-projection").resolve(kind+(feedId.isEmpty()?"":"-"+feedId)+".json"),kind,
                 plugin.getConfig().getBoolean("bedrock.projection.resend-on-model-change",true)
                         ? BedrockEntityResender.create(plugin) : null);
         int ticks=Math.max(1,Math.min(200,plugin.getConfig().getInt("bedrock.projection.interval-ticks",5)));
