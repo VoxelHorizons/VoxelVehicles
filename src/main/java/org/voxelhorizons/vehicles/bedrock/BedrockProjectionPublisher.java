@@ -124,11 +124,13 @@ public final class BedrockProjectionPublisher {
         if (pendingResend.isEmpty() || closed) return;
         final Set<UUID> batch=new HashSet<UUID>(pendingResend);
         pendingResend.clear();
-        plugin.getServer().getScheduler().runTask(plugin,()->{
+        // Remote (network-pulled) feeds need time to reach the proxy Geyser before the re-send.
+        long delay=Math.max(0,Math.min(200,plugin.getConfig().getInt("bedrock.projection.resend-delay-ticks",0)));
+        plugin.getServer().getScheduler().runTaskLater(plugin,()->{
             if (closed) return;
             int sent=resender.resend(batch);
             if (sent>0) plugin.getLogger().fine("Re-sent "+sent+" Bedrock display views after model change");
-        });
+        },delay);
     }
 
     static void publishAtomically(Path output,byte[] data) throws IOException {

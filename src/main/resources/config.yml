@@ -112,3 +112,6 @@ bedrock:
     # re-send it (hide/show, 1.18+) to Bedrock viewers so the new model is applied.
     # Without a local Geyser API every viewer is re-sent (brief Java flicker).
     resend-on-model-change: true
+    # Ticks to wait before that re-send. 0 for a local/mounted Geyser folder; use ~40 when a
+    # proxy Geyser pulls feeds over the network (bedrock.remote_sync in VoxelCore).
+    resend-delay-ticks: 0
