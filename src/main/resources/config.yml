@@ -93,3 +93,25 @@ inventory:
     - 51
     - 52
     - 53
+
+# Paper remains authoritative; this feed contains only visual state and Paper
+# entity UUIDs for a Geyser extension, never inventory contents/permissions.
+bedrock:
+  projection:
+    enabled: true
+    # Empty auto-detects a loaded local Geyser-Spigot plugin's data directory.
+    # For proxy/remote Geyser use a mount to the ACTUAL Geyser data folder.
+    geyser-data-directory: ''
+    # Main-thread capture interval; writes are asynchronous and changes coalesce.
+    # Heartbeat rewrites unchanged state every 10 seconds (stale snapshots expire).
+    interval-ticks: 5
+    # Unique per backend when several servers share one (proxy) Geyser folder, e.g. 'survival'.
+    # Writes vehicles-<feed-id>.json; the VoxelCore Geyser extension merges all feeds.
+    feed-id: ''
+    # Geyser fixes a Bedrock entity's model at spawn. When a vehicle's model changes,
+    # re-send it (hide/show, 1.18+) to Bedrock viewers so the new model is applied.
+    # Without a local Geyser API every viewer is re-sent (brief Java flicker).
+    resend-on-model-change: true
+    # Ticks to wait before that re-send. 0 for a local/mounted Geyser folder; use ~40 when a
+    # proxy Geyser pulls feeds over the network (bedrock.remote_sync in VoxelCore).
+    resend-delay-ticks: 0
