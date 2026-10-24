@@ -73,6 +73,12 @@ public final class VehicleManager {
     VehicleInventories inventories(){return inventories;}
     public Map<ContentID,VehicleDefinition> definitions(){return Collections.unmodifiableMap(definitions);}
     public Collection<VehicleInstance> instances(){return Collections.unmodifiableCollection(instances.values());}
+    /** Read-only world rendering projection; Paper remains authoritative. */
+    public BedrockVehicleSnapshot bedrockSnapshot(){
+        if(!Bukkit.isPrimaryThread())
+            throw new IllegalStateException("Vehicle snapshot must be captured on Paper's primary thread");
+        return BedrockVehicleSnapshot.capture(revision,instances.values(),definitions);
+    }
     public Optional<VehicleDefinition> definition(ContentID id){return Optional.ofNullable(definitions.get(id));}
     public Optional<VehicleInstance> byEntity(Entity e){
         UUID id=entityIndex.get(e.getUniqueId());
